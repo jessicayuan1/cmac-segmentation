@@ -1,3 +1,8 @@
+"""
+This file contains the dataset definition for fundus segmentation.
+It is used directly by only `data_loader.py`.
+"""
+
 import cv2
 import numpy as np
 import pandas as pd
@@ -14,8 +19,8 @@ def center_crop_largest_square(image, **kwargs):
 
 class FundusSegmentationDataset(Dataset):
     """
-    Helps produces the Fundus Dataset. There are 5 transform_type's. 
-    We apply this class 5 times for each transform.
+    Helps produces the Fundus Dataset. There are 7 transform_type's. 
+    We apply this class 7 times for each transform.
 
     Transforms:
     All transforms are applied to the masks and the image
