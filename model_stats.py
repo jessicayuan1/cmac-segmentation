@@ -54,9 +54,9 @@ def analyze_model(
 if __name__ == "__main__":
     from swin_unet_definition.model.swin_unet import SwinUNet
     from CMAC_net_definition.model.CMAC import CMACNet
-    """
+    
     model = SwinUNet(
-        img_size = 1024,
+        img_size = 512,
         patch_size = 4,
         embed_dim = 96,
         depths = [2, 2, 6, 2], 
@@ -74,8 +74,9 @@ if __name__ == "__main__":
         depths = [2, 2, 6, 2],
         img_size = 1024
     )
+    """
 
-    input_shape = (1, 3, 1024, 1024)
+    input_shape = (1, 3, 512, 512)
 
     analyze_model(
         model = model,
