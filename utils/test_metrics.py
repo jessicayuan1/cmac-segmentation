@@ -14,7 +14,7 @@ def test_metrics():
     # Create dummy data
     batch_size = 2
     height, width = 32, 32
-    n_classes = 6  # Background + 5 classes
+    n_classes = 5 #5 classes
 
     # Random predictions (logits)
     predictions = torch.randn(batch_size, n_classes, height, width)
@@ -41,28 +41,28 @@ def test_known_values():
     # Expected metrics for this test case:
     # Predictions: MA, HE; HE, MA
     # Targets: MA, MA; HE, HE
-    # For MA (class 1):
+    # For MA (class 0):
     # IoU = 1/3 ≈ 0.3333, F1 = 0.5, Recall = 0.5
-    # For HE (class 2):
+    # For HE (class 1):
     # IoU = 1/3 ≈ 0.3333, F1 = 0.5, Recall = 0.5
 
     batch_size = 1
     height, width = 2, 2
-    n_classes = 3  # Background + MA + HE
+    n_classes = 2  # MA + HE
 
     # Create predictions (logits) that will argmax to specific classes
     predictions = torch.zeros(batch_size, n_classes, height, width)
-    # Position (0,0): MA (class 1)
-    predictions[0, 1, 0, 0] = 100.0
-    # Position (0,1): HE (class 2)
-    predictions[0, 2, 0, 1] = 100.0
-    # Position (1,0): HE (class 2)
-    predictions[0, 2, 1, 0] = 100.0
-    # Position (1,1): MA (class 1)
-    predictions[0, 1, 1, 1] = 100.0
+    # Position (0,0): MA (class 0)
+    predictions[0, 0, 0, 0] = 100.0
+    # Position (0,1): HE (class 1)
+    predictions[0, 1, 0, 1] = 100.0
+    # Position (1,0): HE (class 1)
+    predictions[0, 1, 1, 0] = 100.0
+    # Position (1,1): MA (class 0)
+    predictions[0, 0, 1, 1] = 100.0
 
     # Create targets
-    targets = torch.tensor([[[1, 1], [2, 2]]])  # MA, MA; HE, HE
+    targets = torch.tensor([[[0, 0], [1, 1]]])  # MA, MA; HE, HE
 
     classes = ['MA', 'HE']
 

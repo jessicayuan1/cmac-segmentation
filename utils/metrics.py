@@ -1,13 +1,13 @@
 import torch
-#Important make sure that predictions and targets have order:[BACKGROUND, MA, HE, EX, SE, OD]
-def calculate_iou_per_class(predictions, targets, n_classes=6):
+#Important make sure that predictions and targets have order:[MA, HE, EX, SE, OD]
+def calculate_iou_per_class(predictions, targets, n_classes=5):
     """Calculate IoU for each class separately
     Order is same as in dataset
     """
     ious = []
     predictions = torch.argmax(predictions, dim=1)
     
-    for class_id in range(1, n_classes):  # Skip background
+    for class_id in range(0, n_classes):
         pred_mask = (predictions == class_id)
         target_mask = (targets == class_id)
         
@@ -30,7 +30,7 @@ def calculate_f1_per_class(predictions, targets, n_classes=6):
     f1s = []
     predictions = torch.argmax(predictions, dim=1)
     
-    for class_id in range(1, n_classes):  # Skip background
+    for class_id in range(0, n_classes):
         pred_mask = (predictions == class_id)
         target_mask = (targets == class_id)
         
@@ -54,7 +54,7 @@ def calculate_recall_per_class(predictions, targets, n_classes=6):
     recalls = []
     predictions = torch.argmax(predictions, dim=1)
     
-    for class_id in range(1, n_classes):  # Skip background
+    for class_id in range(0, n_classes):
         pred_mask = (predictions == class_id)
         target_mask = (targets == class_id)
         
