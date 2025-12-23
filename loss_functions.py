@@ -2,44 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# Ignore the triloss for now
-class TriLoss(nn.Module):
-    """
-    Combined Loss Function for Semantic Segmentation.
-    Final Loss:
-        L = w_ft * Focal Tversky Loss + w_dice * Dice Loss + w_bce * Binary Cross Entropy Loss
-    Arguments:
-        w_ft (float): Weight for Focal Tversky loss
-        w_dice (float): Weight for Dice loss
-        w_bce (float): Weight for BCE loss
-        alpha, beta, gamma: Focal Tversky hyperparameters
-        smooth (float): Stability constant for Focal Tversky/Dice Loss
-        pos_weight (Tensor or None): Optional per-class weighting for BCEWithLogitsLoss
-
-    Expected Shapes:
-        logits: (B, C, H, W)
-        targets: (B, C, H, W)
-
-    Returns:
-        Scalar Combined Loss Value (torch.Tensor)
-    """
-    def __init__(self, w_ft = 0.5, w_dice = 0.3, w_bce = 0.2, alpha = 0.3,
-                 beta = 0.7, gamma = 1.3, smooth = 1e-6, pos_weight = None):
-        super().__init__()
-        self.w_ft = w_ft
-        self.w_dice = w_dice
-        self.w_bce = w_bce
-        # Loss components
-        self.ft = FocalTverskyLoss(alpha = alpha, beta = beta, gamma = gamma, smooth = smooth)
-        self.dice = DiceLossMultiLabel(smooth = smooth)
-        self.bce = BCEwithLogitsLossMultiLabel(weight = pos_weight)
-
-    def forward(self, logits, targets):
-        L_ft = self.ft(logits, targets)
-        L_dice = self.dice(logits, targets)
-        L_bce = self.bce(logits, targets)
-        return self.w_ft * L_ft + self.w_dice * L_dice + self.w_bce * L_bce
-
 class FocalTverskyLoss(nn.Module):
     """
     Multi-Label Focal Tversky Loss for Semantic Segmentation.
@@ -79,15 +41,23 @@ class FocalTverskyLoss(nn.Module):
     Returns:
         Scalar Focal Tversky Loss (torch.Tensor)
     """
+
     def __init__(self, alpha = 0.3, beta = 0.7, gamma = 1.3, smooth = 1e-6):
         super().__init__()
-        # alpha/beta/gamma can be:
+
+        # alpha / beta / gamma can be:
         # - scalars (same for all classes)
         # - tensors of shape (C,) for class-specific weighting
-        self.alpha = alpha
-        self.beta = beta
-        self.gamma = gamma
+        # They are registered as buffers so they:
+        # - move with the model across devices
+        # - are saved in state_dict
+        # - are not trainable parameters
+        self.register_buffer("alpha", torch.tensor(alpha))
+        self.register_buffer("beta",  torch.tensor(beta))
+        self.register_buffer("gamma", torch.tensor(gamma))
+
         self.smooth = smooth
+
     def forward(self, logits, targets):
         # Sigmoid over logits -> probabilities per channel
         probs = torch.sigmoid(logits)
@@ -101,19 +71,17 @@ class FocalTverskyLoss(nn.Module):
         FP = (probs_flat * (1 - targets_flat)).sum(dim = 2)
         FN = ((1 - probs_flat) * targets_flat).sum(dim = 2)
 
-        # Convert alpha/beta/gamma to tensors
-        # Can remove this if using scalars for them
-        alpha = torch.tensor(self.alpha, device = logits.device)
-        beta  = torch.tensor(self.beta,  device = logits.device)
-        gamma = torch.tensor(self.gamma, device = logits.device)
+        alpha = self.alpha
+        beta  = self.beta
+        gamma = self.gamma
 
         # If they are scalars, broadcast to class dimension
         if alpha.ndim == 0:
-            alpha = alpha.expand(logits.size(1))
+            alpha = alpha.expand(TP.size(1))
         if beta.ndim == 0:
-            beta = beta.expand(logits.size(1))
+            beta = beta.expand(TP.size(1))
         if gamma.ndim == 0:
-            gamma = gamma.expand(logits.size(1))
+            gamma = gamma.expand(TP.size(1))
 
         # Reshape for broadcasting: (1, C)
         alpha = alpha.view(1, -1)
@@ -124,9 +92,11 @@ class FocalTverskyLoss(nn.Module):
         Tversky = (TP + self.smooth) / (
             TP + alpha * FP + beta * FN + self.smooth
         )
+
         # Focal Tversky Loss
         focal_tversky = (1 - Tversky) ** gamma
-        # Return Mean across batch and classes
+
+        # Return mean across batch and classes
         return focal_tversky.mean()
 
 class DiceLossMultiLabel(nn.Module):
@@ -232,3 +202,41 @@ class BCEwithLogitsLossMultiLabel(nn.Module):
             Tensor: BCE loss scalar value.
         """
         return self.bce(logits, targets.float())
+    
+# Ignore the triloss for now
+class TriLoss(nn.Module):
+    """
+    Combined Loss Function for Semantic Segmentation.
+    Final Loss:
+        L = w_ft * Focal Tversky Loss + w_dice * Dice Loss + w_bce * Binary Cross Entropy Loss
+    Arguments:
+        w_ft (float): Weight for Focal Tversky loss
+        w_dice (float): Weight for Dice loss
+        w_bce (float): Weight for BCE loss
+        alpha, beta, gamma: Focal Tversky hyperparameters
+        smooth (float): Stability constant for Focal Tversky/Dice Loss
+        pos_weight (Tensor or None): Optional per-class weighting for BCEWithLogitsLoss
+
+    Expected Shapes:
+        logits: (B, C, H, W)
+        targets: (B, C, H, W)
+
+    Returns:
+        Scalar Combined Loss Value (torch.Tensor)
+    """
+    def __init__(self, w_ft = 0.5, w_dice = 0.3, w_bce = 0.2, alpha = 0.3,
+                 beta = 0.7, gamma = 1.3, smooth = 1e-6, pos_weight = None):
+        super().__init__()
+        self.w_ft = w_ft
+        self.w_dice = w_dice
+        self.w_bce = w_bce
+        # Loss components
+        self.ft = FocalTverskyLoss(alpha = alpha, beta = beta, gamma = gamma, smooth = smooth)
+        self.dice = DiceLossMultiLabel(smooth = smooth)
+        self.bce = BCEwithLogitsLossMultiLabel(weight = pos_weight)
+
+    def forward(self, logits, targets):
+        L_ft = self.ft(logits, targets)
+        L_dice = self.dice(logits, targets)
+        L_bce = self.bce(logits, targets)
+        return self.w_ft * L_ft + self.w_dice * L_dice + self.w_bce * L_bce
