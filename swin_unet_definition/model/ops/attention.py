@@ -137,19 +137,25 @@ class ShiftedWindowAttention(nn.Module):
         mask = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)
         mask = mask.masked_fill(mask != 0, float("-inf"))
         mask = mask.masked_fill(mask == 0, 0.0)
-        return mask  # (nW, ws * ws, ws * ws)
+        # Return only first mask - all windows have the same pattern
+        return mask[0:1]  # (1, ws * ws, ws * ws)
+
     def forward(self, x):
         B, C, H, W = x.shape
         ws = self.window_size
         ss = self.shift_size
+        
         # Cyclic Shift
         if ss > 0:
             shifted_x = torch.roll(x, shifts = (-ss, -ss), dims = (2, 3))
         else:
             shifted_x = x
+        
         # Build mask if needed
-        if (self.attn_mask is None) or (self.attn_mask.shape[0] != (H // ws) * (W // ws)):
+        num_windows = (H // ws) * (W // ws)
+        if (self.attn_mask is None) or (self.attn_mask.shape[1] != ws * ws):
             self.attn_mask = self.create_mask(H, W, x.device)
+        
         # Partition into Windows
         x_windows = WindowPartition(ws)(shifted_x)  # (B * nW, ws * ws, C)
         # Apply window attention with mask

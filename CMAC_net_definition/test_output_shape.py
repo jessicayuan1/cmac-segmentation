@@ -3,9 +3,9 @@ from model.CMAC import CMACNet
 
 def main():
     # Dummy 768x768 RGB input
-    x = torch.randn(1, 3, 768, 768)
+    x = torch.randn(1, 3, 512, 512)
     # Initialize Model
-    model = CMACNet(in_channels=3, out_channels=5, embed_dim=96, img_size=768, depths=[2, 2, 6, 2])
+    model = CMACNet(in_channels=3, out_channels=5, embed_dim=96, img_size=512, depths=[2, 2, 6, 2])
     # Forward Pass
     out = model(x)
     # Print Shapes
