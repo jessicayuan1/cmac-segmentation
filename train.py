@@ -27,8 +27,8 @@ from training_loop import train_one_epoch
 from valid_loop import valid_one_epoch
 
 # =============== Global Constants (Adjusted depending on the experiment) =================
-IMG_SIZE = 1024
-DEFAULT_EPOCHS = 100
+IMG_SIZE = 512
+DEFAULT_EPOCHS = 2
 LEARNING_RATE = 1e-5
 DEFAULT_SEED = 42
 NUM_WORKERS = 4
@@ -77,14 +77,88 @@ def main():
         alpha = TVERSKY_ALPHA, 
         beta = TVERSKY_BETA, 
         gamma = TVERSKY_GAMMA)
-
+    
     train_dataloader, val_dataloader, test_dataloader = get_fundus_dataloaders(
         resolution = IMG_SIZE,
         batch_size = BATCH_SIZE,
         pin_memory = True,
         num_workers = NUM_WORKERS
     )
-    print(f"{len(train_dataloader), len(val_dataloader), len(test_dataloader)}")
+    # ================= Metric Storage =================
+    train_losses = []
+    val_losses = []
+
+    train_ious = []
+    train_f1s = []
+    train_recalls = []
+
+    val_ious = []
+    val_f1s = []
+    val_recalls = []
+
+    # ================= Training Loop =================
+    for epoch in range(DEFAULT_EPOCHS):
+        print(f"\nEpoch [{epoch + 1}/{DEFAULT_EPOCHS}]")
+
+        train_loss, tr_iou, tr_f1, tr_rec = train_one_epoch(
+            model = model,
+            dataloader = train_dataloader,
+            optimizer = optimizer,
+            criterion = loss_function,
+            device = device,
+            n_classes = OUT_CHANNELS,
+        )
+
+        val_loss, v_iou, v_f1, v_rec = valid_one_epoch(
+            model = model,
+            dataloader = val_dataloader,
+            criterion = loss_function,
+            device = device,
+            n_classes = OUT_CHANNELS,
+        )
+
+        scheduler.step(val_loss)
+
+        # Store
+        train_losses.append(train_loss)
+        val_losses.append(val_loss)
+
+        train_ious.append(tr_iou)
+        train_f1s.append(tr_f1)
+        train_recalls.append(tr_rec)
+
+        val_ious.append(v_iou)
+        val_f1s.append(v_f1)
+        val_recalls.append(v_rec)
+        print('hi')
+        # ================= Print Results =================
+    print("\n==== Training Results ====")
+    print("Train Losses:", train_losses)
+    print("Val Losses:", val_losses)
+
+    print("\nTrain IoUs per epoch:")
+    for i, vals in enumerate(train_ious):
+        print(f"Epoch {i+1}:", vals)
+
+    print("\nVal IoUs per epoch:")
+    for i, vals in enumerate(val_ious):
+        print(f"Epoch {i+1}:", vals)
+
+    print("\nTrain F1s per epoch:")
+    for i, vals in enumerate(train_f1s):
+        print(f"Epoch {i+1}:", vals)
+
+    print("\nVal F1s per epoch:")
+    for i, vals in enumerate(val_f1s):
+        print(f"Epoch {i+1}:", vals)
+
+    print("\nTrain Recalls per epoch:")
+    for i, vals in enumerate(train_recalls):
+        print(f"Epoch {i+1}:", vals)
+
+    print("\nVal Recalls per epoch:")
+    for i, vals in enumerate(val_recalls):
+        print(f"Epoch {i+1}:", vals)
 
 
 if __name__ == "__main__":
