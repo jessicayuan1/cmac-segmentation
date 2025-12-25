@@ -1,43 +1,42 @@
 import torch
-from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
-from utils.metrics import calculate_iou_per_class, calculate_f1_per_class, calculate_recall_per_class
-def valid_one_epoch(model, dataloader, criterion, device, n_classes=5):
+from utils.multilabel_metrics import iou_per_class, f1_per_class, recall_per_class
+
+# Validate for one epoch
+def valid_one_epoch(model, dataloader, criterion, device, n_classes = 5):
     model.eval()
     val_loss = 0.0
-    class_ious = [[] for _ in range(n_classes)]
-    class_f1s = [[] for _ in range(n_classes)]
-    class_recalls = [[] for _ in range(n_classes)]
+    total_samples = 0
+
+    class_ious = [0.0 for _ in range(n_classes)]
+    class_f1s = [0.0 for _ in range(n_classes)]
+    class_recalls = [0.0 for _ in range(n_classes)]
     
     with torch.no_grad():
         for imgs, masks in dataloader:
             imgs, masks = imgs.to(device), masks.to(device)
-            outputs = model(imgs)
+
+            batch_size = imgs.size(0)
+            total_samples += batch_size
             
-            # Calculate loss
+            outputs = model(imgs)
             loss = criterion(outputs, masks)
+
             val_loss += loss.item() * imgs.size(0)
             
-            # Convert to binary predictions for metrics
-            preds = torch.sigmoid(outputs)
-            
-            # Calculate metrics, can be disabled if only loss is desired
-            batch_ious = calculate_iou_per_class(preds, masks, n_classes=n_classes)
-            batch_f1s = calculate_f1_per_class(preds, masks, n_classes=n_classes)
-            batch_recalls = calculate_recall_per_class(preds, masks, n_classes=n_classes)
+            batch_ious = iou_per_class(outputs, masks, num_classes = 5)
+            batch_f1s = f1_per_class(outputs, masks, num_classes = 5)
+            batch_recalls = recall_per_class(outputs, masks, num_classes = 5)
 
             # Accumulate metrics
             for i in range(n_classes):
-                if batch_ious[i] is not None:
-                    class_ious[i].append(batch_ious[i])
-                if batch_f1s[i] is not None:
-                    class_f1s[i].append(batch_f1s[i])
-                if batch_recalls[i] is not None:
-                    class_recalls[i].append(batch_recalls[i])
+                class_ious[i] += batch_ious[i] * batch_size
+                class_f1s[i] += batch_f1s[i] * batch_size
+                class_recalls[i] += batch_recalls[i] * batch_size
     
     # Aggregate results
-    epoch_loss = val_loss / len(dataloader.dataset)
-    epoch_ious = [sum(cls) / len(cls) if cls else 0 for cls in class_ious]
-    epoch_f1s = [sum(cls) / len(cls) if cls else 0 for cls in class_f1s]
-    epoch_recalls = [sum(cls) / len(cls) if cls else 0 for cls in class_recalls]
+    epoch_loss = val_loss / total_samples
+    epoch_ious = [v / total_samples for v in class_ious]
+    epoch_f1s = [v / total_samples for v in class_f1s]
+    epoch_recalls = [v / total_samples for v in class_recalls]
     
     return epoch_loss, epoch_ious, epoch_f1s, epoch_recalls

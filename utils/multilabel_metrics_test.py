@@ -67,9 +67,9 @@ def test_metrics_known_small():
     print_segmentation_metrics(predictions, targets, CLASSES)
 
     # Optional hard assertions (lightweight)
-    ious = iou_per_class(predictions, targets)
-    f1s = f1_per_class(predictions, targets)
-    recalls = recall_per_class(predictions, targets)
+    ious = iou_per_class(predictions, targets, num_classes = 5)
+    f1s = f1_per_class(predictions, targets, num_classes = 5)
+    recalls = recall_per_class(predictions, targets, num_classes = 5)
 
     assert ious.shape == (5,)
     assert f1s.shape == (5,)
