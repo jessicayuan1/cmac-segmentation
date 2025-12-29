@@ -9,7 +9,7 @@ This is the main training entry point.
 import os
 import sys
 import time
-import argparse
+import csv
 from pathlib import Path
 
 # Third-Party Imports
@@ -26,26 +26,40 @@ from loss_functions import FocalTverskyLoss
 from training_loop import train_one_epoch
 from valid_loop import valid_one_epoch
 
-# =============== Global Constants (Adjusted depending on the experiment) =================
+# =============== Global Constants  =================
+MODEL_NAME = "swinunet_512_tversky_50_50"
+
 IMG_SIZE = 512
-DEFAULT_EPOCHS = 2
+DEFAULT_EPOCHS = 150
 LEARNING_RATE = 1e-5
 DEFAULT_SEED = 42
+
+BATCH_SIZE = 16
 NUM_WORKERS = 4
+
 SCHEDULER_FACTOR = 0.5
 SCHEDULER_EPOCHS = 10
+
 TVERSKY_ALPHA = 0.5
 TVERSKY_BETA = 0.5
 TVERSKY_GAMMA = 1.3
-BATCH_SIZE = 16
+
 OUT_CHANNELS = 5
 IN_CHANNELS = 3
+
 WINDOW_SIZE = 8
 PATCH_SIZE = 4
 
-# =============== Initializations/Main Function ==================
+OUTPUT_DIR = Path(MODEL_NAME)
+
+# =============== Main ================
 def main():
+    torch.manual_seed(DEFAULT_SEED)
+
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    OUTPUT_DIR.mkdir(parents = True, exist_ok = True)
+
+    # ============== Model ===============
     model = SwinUNet(
         img_size = IMG_SIZE,
         patch_size = PATCH_SIZE,
@@ -66,6 +80,7 @@ def main():
         img_size = IMG_SIZE
     ).to(device = device)
     """
+    # ============ Optimizer / Scheduler =================
     optimizer = torch.optim.Adam(params = model.parameters(), lr = LEARNING_RATE)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
@@ -73,11 +88,15 @@ def main():
         factor = SCHEDULER_FACTOR,
         patience = SCHEDULER_EPOCHS,
     )
+
+    # ============== Loss =================
     loss_function = FocalTverskyLoss(
         alpha = TVERSKY_ALPHA, 
         beta = TVERSKY_BETA, 
         gamma = TVERSKY_GAMMA)
     
+
+    # ================ Data =================
     train_dataloader, val_dataloader, test_dataloader = get_fundus_dataloaders(
         resolution = IMG_SIZE,
         batch_size = BATCH_SIZE,
@@ -95,6 +114,8 @@ def main():
     val_ious = []
     val_f1s = []
     val_recalls = []
+
+    best_val_f1 = -1.0
 
     # ================= Training Loop =================
     for epoch in range(DEFAULT_EPOCHS):
@@ -119,47 +140,49 @@ def main():
 
         scheduler.step(val_loss)
 
-        # Store
+        # ===== Store Metrics =====
         train_losses.append(train_loss)
         val_losses.append(val_loss)
 
         train_ious.append(tr_iou)
-        train_f1s.append(tr_f1)
-        train_recalls.append(tr_rec)
-
         val_ious.append(v_iou)
+
+        train_f1s.append(tr_f1)
         val_f1s.append(v_f1)
+
+        train_recalls.append(tr_rec)
         val_recalls.append(v_rec)
-        print('hi')
-        # ================= Print Results =================
-    print("\n==== Training Results ====")
-    print("Train Losses:", train_losses)
-    print("Val Losses:", val_losses)
 
-    print("\nTrain IoUs per epoch:")
-    for i, vals in enumerate(train_ious):
-        print(f"Epoch {i+1}:", vals)
+        # ===== Save Best Model (Done if Validation F1 > Best F1 so far) =====
+        if v_f1 > best_val_f1:
+            best_val_f1 = v_f1
+            torch.save(
+                model.state_dict(),
+                OUTPUT_DIR / "best_model.pt"
+            )
+            print(f"Saved new best model (val_f1 = {v_f1:.4f})")
+    # ================= Save Metrics CSV =================
+    csv_path = OUTPUT_DIR / f"{MODEL_NAME}.csv"
+    with open(csv_path, mode = "w", newline = "") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            "epoch",
+            "train_loss", "val_loss",
+            "train_iou", "val_iou",
+            "train_f1", "val_f1",
+            "train_recall", "val_recall"
+        ])
 
-    print("\nVal IoUs per epoch:")
-    for i, vals in enumerate(val_ious):
-        print(f"Epoch {i+1}:", vals)
+        for epoch in range(DEFAULT_EPOCHS):
+            writer.writerow([
+                epoch + 1,
+                train_losses[epoch], val_losses[epoch],
+                train_ious[epoch],   val_ious[epoch],
+                train_f1s[epoch],    val_f1s[epoch],
+                train_recalls[epoch], val_recalls[epoch]
+            ])
 
-    print("\nTrain F1s per epoch:")
-    for i, vals in enumerate(train_f1s):
-        print(f"Epoch {i+1}:", vals)
-
-    print("\nVal F1s per epoch:")
-    for i, vals in enumerate(val_f1s):
-        print(f"Epoch {i+1}:", vals)
-
-    print("\nTrain Recalls per epoch:")
-    for i, vals in enumerate(train_recalls):
-        print(f"Epoch {i+1}:", vals)
-
-    print("\nVal Recalls per epoch:")
-    for i, vals in enumerate(val_recalls):
-        print(f"Epoch {i+1}:", vals)
-
+    print(f"Training complete.")
 
 if __name__ == "__main__":
     main()
