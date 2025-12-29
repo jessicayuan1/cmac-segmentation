@@ -225,7 +225,7 @@ class FundusSegmentationDataset(Dataset):
 
         masks = []
         for path in mask_paths:
-            if path is None:
+            if pd.isna(path):
                 height, width = image.shape[:2]
                 mask = np.zeros((height, width), dtype = np.uint8)
             else:

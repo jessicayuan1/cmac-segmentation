@@ -2,15 +2,15 @@
 Function for building PyTorch DataLoaders for fundus image segmentation.
 The function is imported into the main training file `train.py`.
 
-This module reads preprocessed dataset splits stored as pickle files
+This module reads preprocessed dataset splits stored as csv files
 (train / validation / test) and constructs corresponding PyTorch
 DataLoader objects. Training data is augmented via multiple transform
 variants using ConcatDataset.
 
-Expected files in `data_csv_dir`:
-- train_df.pkl
-- val_df.pkl
-- test_df.pkl
+Expected files in `data_csv`:
+- train_df.csv
+- val_df.csv
+- test_df.csv
 """
 import pandas as pd
 from torch.utils.data import DataLoader, ConcatDataset
@@ -47,9 +47,11 @@ def get_fundus_dataloaders(
         val_loader   (DataLoader): DataLoader for validation data.
         test_loader  (DataLoader): DataLoader for test data.
     """
-    train_df = pd.read_pickle(f"{data_csv_dir}/train_df.pkl")
-    val_df   = pd.read_pickle(f"{data_csv_dir}/val_df.pkl")
-    test_df  = pd.read_pickle(f"{data_csv_dir}/test_df.pkl")
+    train_df = pd.read_csv(f"{data_csv_dir}/train_df.csv")
+    val_df   = pd.read_csv(f"{data_csv_dir}/val_df.csv")
+    test_df  = pd.read_csv(f"{data_csv_dir}/test_df.csv")
+
+    assert set(train_df.columns) == set(val_df.columns) == set(test_df.columns)
 
     train_transforms = ["t1", "t2", "t3", "t4", "t5", "t6", "t7"]
     train_ds = ConcatDataset(
@@ -87,3 +89,21 @@ def get_fundus_dataloaders(
     )
     return train_loader, val_loader, test_loader
 
+if __name__ == "__main__":
+    train_loader, val_loader, test_loader = get_fundus_dataloaders(
+        resolution = 512,
+        batch_size = 16,
+        data_csv_dir = "data_csv",
+        pin_memory = False,
+        num_workers = 1,
+    )
+
+    print("Dataset sizes:")
+    print("Train:", len(train_loader.dataset))
+    print("Val:  ", len(val_loader.dataset))
+    print("Test: ", len(test_loader.dataset))
+
+    print("\nDataloader sizes (batches):")
+    print("Train:", len(train_loader))
+    print("Val:  ", len(val_loader))
+    print("Test: ", len(test_loader))
