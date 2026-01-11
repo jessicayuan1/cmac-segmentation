@@ -1,6 +1,8 @@
 # **CNN vs. ViT-Based U-Nets for Diabetic Retinopathy Lesion Segmentation @ WAT.ai**
 ## Semantic Segmentation of Retinal Lesions caused by Diabetic Retinopathy
 
+![Fundus Example](model_training/utils/assets/sample1.png)
+
 ### Overview
 This repository contains work in progress on the **semantic segmentation of microaneurysms, hemorrhages, soft exudates, hard exudates, and the optic disc** (lesions resulting from Diabetic Retinopathy) from fundus images. In addition to building the full segmentation pipeline, the project also conducts a comparison between **CMAC-UNet** (a convolution-based architecture) and **Swin-UNet** (a transformer-based architecture). This project also conducts comparisons between loss functions: **Binary Cross-Entropy, Focal Tversky, and Dice** to access how different optimization techniques influence small-lesion detection, class imbalance, and overall segmentation quality.
 
