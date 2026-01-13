@@ -19,7 +19,6 @@ from torch.utils.data import DataLoader
 import torch.optim as optim
 
 # Local Imports
-from swin_unet_definition.model.swin_unet import SwinUNet
 from CMAC_net_definition.model.CMAC import CMACNet
 from model_training.data_loader import get_fundus_dataloaders
 from model_training.loss_functions import (
@@ -31,7 +30,7 @@ from model_training.training_loop import train_one_epoch
 from model_training.valid_loop import valid_one_epoch
 
 # =============== Global Constants  =================
-MODEL_NAME = "swinunet_512_tversky_50_50"
+MODEL_NAME = ""
 
 IMG_SIZE = 512
 DEFAULT_EPOCHS = 150
@@ -64,18 +63,6 @@ def main():
     OUTPUT_DIR.mkdir(parents = True, exist_ok = True)
 
     # ============== Model ===============
-    model = SwinUNet(
-        img_size = IMG_SIZE,
-        patch_size = PATCH_SIZE,
-        embed_dim = 96,
-        depths = [2, 2, 6, 2], 
-        num_heads = [3, 6, 12, 24], 
-        window_size = WINDOW_SIZE,
-        mlp_ratio = 4,
-        out_channels = OUT_CHANNELS,
-        in_channels = 3
-    ).to(device = device)
-    """
     model = CMACNet(
         in_channels = IN_CHANNELS,
         out_channels = OUT_CHANNELS,
@@ -83,7 +70,7 @@ def main():
         depths = [2, 2, 6, 2],
         img_size = IMG_SIZE
     ).to(device = device)
-    """
+    
     # ============ Optimizer / Scheduler =================
     optimizer = torch.optim.Adam(params = model.parameters(), lr = LEARNING_RATE)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
@@ -102,10 +89,15 @@ def main():
 
     # ================ Data =================
     train_dataloader, val_dataloader, test_dataloader = get_fundus_dataloaders(
-        resolution = IMG_SIZE,
-        batch_size = BATCH_SIZE,
-        pin_memory = True,
-        num_workers = NUM_WORKERS
+        resolution = 512,
+        batch_size = 16,
+        data_csv_dir = "data_csv",
+        use_clahe = True,
+        clahe_clip = 2.0,
+        clahe_tile = (8, 8),
+        clahe_mode = "lab",
+        pin_memory = False,
+        num_workers = 1,
     )
     # ================= Metric Storage =================
     train_losses = []

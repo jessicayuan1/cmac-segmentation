@@ -13,9 +13,10 @@ Expected files in `data_csv`:
 - test_df.csv
 """
 import pandas as pd
-from torch.utils.data import DataLoader, ConcatDataset
-from model_training.dataset_definition import FundusSegmentationDataset
+from torch.utils.data import DataLoader
 from pathlib import Path
+
+from model_training.dataset_definition import FundusSegmentationDataset
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_CSV_DIR = REPO_ROOT / "data_csv"
@@ -24,49 +25,51 @@ def get_fundus_dataloaders(
     resolution,
     batch_size = 16,
     data_csv_dir = DATA_CSV_DIR,
+    use_clahe = False,
+    clahe_clip = 2.5,
+    clahe_tile = (8, 8),
+    clahe_mode = "lab",
     pin_memory = False,
-    num_workers = 1
+    num_workers = 1,
 ):
     """
-    Build PyTorch DataLoaders for fundus image segmentation.
-
-    Loads train, validation, and test dataset splits and constructs DataLoader objects at a fixed image resolution.
-    Training data is augmented by concatenating multiple transform variants, while validation and test sets use deterministic
-    transforms only.
-    Arguments:
-        resolution (int):
-            Target image resolution (either 512, 768, or 1024).
-        batch_size (int):
-            Number of samples per batch. Defaults to 16.
-        data_csv_dir (str, optional):
-            Directory containing dataset DataFrames as .csv files.
-            Defaults to "data_csv".
-        pin_memory (bool, optional):
-            Whether to enable pinned memory for faster CPU → GPU transfers.
-            Should be True when training on CUDA. Defaults to False.
-        num_workers (int, optional):
-            Number of subprocesses used for data loading. Defaults to 1.
-    Returns (in order):
-        train_loader (DataLoader): DataLoader for training data.
-        val_loader   (DataLoader): DataLoader for validation data.
-        test_loader  (DataLoader): DataLoader for test data.
+    Build PyTorch DataLoaders for fundus image segmentation
+    using precomputed CSV dataset splits.
     """
-    train_df = pd.read_csv(f"{data_csv_dir}/train_df.csv")
-    val_df   = pd.read_csv(f"{data_csv_dir}/val_df.csv")
-    test_df  = pd.read_csv(f"{data_csv_dir}/test_df.csv")
+
+    train_df = pd.read_csv(Path(data_csv_dir) / "train_df.csv")
+    val_df   = pd.read_csv(Path(data_csv_dir) / "val_df.csv")
+    test_df  = pd.read_csv(Path(data_csv_dir) / "test_df.csv")
 
     assert set(train_df.columns) == set(val_df.columns) == set(test_df.columns)
 
-    train_transforms = ["t1", "t2", "t3", "t4", "t5", "t6", "t7"]
-    train_ds = ConcatDataset(
-        [
-            FundusSegmentationDataset(train_df, resolution, transform_type = t)
-            for t in train_transforms
-        ]
+    train_ds = FundusSegmentationDataset(
+        train_df,
+        dimensions = resolution,
+        transform_type = "train",
+        use_clahe = use_clahe,
+        clahe_clip = clahe_clip,
+        clahe_tile = clahe_tile,
+        clahe_mode = clahe_mode,
     )
-    val_ds = FundusSegmentationDataset(val_df, resolution, transform_type = "test")
-    test_ds = FundusSegmentationDataset(test_df, resolution, transform_type = "test")
-
+    val_ds = FundusSegmentationDataset(
+        val_df,
+        dimensions = resolution,
+        transform_type = "eval",
+        use_clahe = use_clahe,
+        clahe_clip = clahe_clip,
+        clahe_tile = clahe_tile,
+        clahe_mode = clahe_mode,
+    )
+    test_ds = FundusSegmentationDataset(
+        test_df,
+        dimensions = resolution,
+        transform_type = "eval",
+        use_clahe = use_clahe,
+        clahe_clip = clahe_clip,
+        clahe_tile = clahe_tile,
+        clahe_mode = clahe_mode,
+    )
     train_loader = DataLoader(
         train_ds,
         batch_size = batch_size,
@@ -98,6 +101,10 @@ if __name__ == "__main__":
         resolution = 512,
         batch_size = 16,
         data_csv_dir = "data_csv",
+        use_clahe = True,
+        clahe_clip = 2.0,
+        clahe_tile = (8, 8),
+        clahe_mode = "lab",
         pin_memory = False,
         num_workers = 1,
     )

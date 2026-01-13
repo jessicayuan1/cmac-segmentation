@@ -17,242 +17,170 @@ def center_crop_largest_square(image, **kwargs):
     left = (w - min_dim) // 2
     return image[top : top + min_dim, left:left + min_dim]
 
+def apply_clahe(
+    image_rgb,
+    clip_limit = 2.5,
+    tile_grid_size = (8, 8),
+    mode = "lab"   # "lab" or "green"
+):
+    clahe = cv2.createCLAHE(
+        clipLimit = clip_limit,
+        tileGridSize = tile_grid_size
+    )
+    if mode == "lab":
+        lab = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2LAB)
+        l, a, b = cv2.split(lab)
+        l = clahe.apply(l)
+        lab = cv2.merge((l, a, b))
+        return cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
+    elif mode == "green":
+        out = image_rgb.copy()
+        out[:, :, 1] = clahe.apply(out[:, :, 1])
+        return out
+    else:
+        raise ValueError("mode must be 'lab' or 'green'")
+    
+class CLAHETransform(A.ImageOnlyTransform):
+    def __init__(self, dataset):
+        super().__init__(p = 1.0)
+        self.dataset = dataset
+
+    def apply(self, image, **params):
+        if not self.dataset.use_clahe:
+            return image
+
+        return apply_clahe(
+            image,
+            clip_limit = self.dataset.clahe_clip,
+            tile_grid_size = self.dataset.clahe_tile,
+            mode = self.dataset.clahe_mode
+        )
+
 class FundusSegmentationDataset(Dataset):
     """
-    Helps produces the Fundus Dataset. There are 7 transform_type's. 
-    We apply this class 7 times for each transform.
+    Fundus Dataset
+    - Center crop largest square
+    - Resize to (dimensions, dimensions)
 
-    Transforms:
-    All transforms are applied to the masks and the image
-    All transforms starting by cropping the largest square possible from the center of the image
-    All transforms end by resizing to (self.dimensions, self.dimensions)
-        t1 and test: Only Resize
-        t2: Horizontal Flip
-        t3: + or - 20% max zoom
-        t4: Brightness and Contrast, Random Gamma
-        t5: + or - 20 degree max rotation
-        t6: Color Adjustments
-        t7: Elastic Transform
-
-    Default dimensions are 1024x1024. 
-    Each mask is its own channel so the returned shapes are:
-    image: (3, 1024, 1024)
-    masks: (5, 1024, 1024)
+    image: (3, H, W)
+    masks: (4, H, W)  # EX, HE, MA, SE
     """
-    def __init__(self, df: pd.DataFrame, dimensions: int = 1024, transform_type = None):
+
+    CLASSES = ["EX", "HE", "MA", "SE"]
+    MASK_COLUMNS = {
+        "EX": "ex_path",
+        "HE": "he_path",
+        "MA": "ma_path",
+        "SE": "se_path",
+    }
+
+    def __init__(
+        self,
+        df: pd.DataFrame,
+        dimensions: int = 512,
+        transform_type = "train",
+        use_clahe: bool = False,
+        clahe_clip: float = 2.5,
+        clahe_tile: tuple = (8, 8),
+        clahe_mode: str = "lab",
+    ):
         self.df = df.reset_index(drop = True)
         self.dimensions = dimensions
         self.transform_type = transform_type
-        self.transforms = self._build_transforms(transform_type)
 
-    def _build_transforms(self, ttype):
-        """ttype is any of (t1, t2, t3, t4, t5, t6, t7, test)"""
-        if ttype is None:
-            return None
-        if ttype == 't1' or ttype == 'test':
-            return A.Compose(
+        self.use_clahe = use_clahe
+        self.clahe_clip = float(clahe_clip)
+        self.clahe_tile = clahe_tile
+        self.clahe_mode = clahe_mode
+
+        self.transforms = self._build_transforms()
+
+    def _build_transforms(self):
+        transforms = [
+            A.Lambda(
+                image = center_crop_largest_square,
+                mask = center_crop_largest_square
+            ),
+            A.Resize(self.dimensions, self.dimensions),
+            CLAHETransform(self),
+        ]
+
+        if self.transform_type == "train":
+            transforms.extend(
                 [
-                    A.Lambda(
-                        image = center_crop_largest_square,
-                        mask = center_crop_largest_square
-                    ),
-                    A.Resize(self.dimensions, self.dimensions)
-            ],
-                additional_targets = {
-                        "mask1": "mask",
-                        "mask2": "mask",
-                        "mask3": "mask",
-                        "mask4": "mask",
-                        "mask5": "mask",
-                },
-                is_check_shapes = False
-                )
-        if ttype == "t2":
-            return A.Compose(
-                [
-                    A.Lambda(
-                        image = center_crop_largest_square,
-                        mask = center_crop_largest_square
-                    ),
-                    A.HorizontalFlip(p = 1.0),
-                    A.Resize(self.dimensions, self.dimensions)
-                ], 
-                additional_targets = {
-                    "mask1": "mask",
-                    "mask2": "mask",
-                    "mask3": "mask",
-                    "mask4": "mask",
-                    "mask5": "mask",
-                },
-                is_check_shapes = False
-            )
-        if ttype == "t3":
-            return A.Compose(
-                [
-                    A.Lambda(
-                        image = center_crop_largest_square,
-                        mask = center_crop_largest_square
-                    ),
+                    A.HorizontalFlip(p = 0.5),
+                    A.VerticalFlip(p = 0.5),
                     A.Affine(
-                        scale = (0.80, 1.20),
-                        translate_px = 0,
-                        rotate = 0,
-                        border_mode = cv2.BORDER_CONSTANT,
-                        fill = 0,
-                        fill_mask = 0,
-                        p = 1.0
-                    ),
-                    A.Resize(self.dimensions, self.dimensions)
-                ],
-                additional_targets = {
-                    "mask1": "mask",
-                    "mask2": "mask",
-                    "mask3": "mask",
-                    "mask4": "mask",
-                    "mask5": "mask",
-                },
-                is_check_shapes = False
+                    translate_percent = 0.08,
+                    scale = (0.88, 1.12),
+                    rotate = (-15, 15),
+                    border_mode = cv2.BORDER_CONSTANT,
+                    fill = 0,
+                    fill_mask = 0,
+                    p = 0.7,
+                )
+                ]
             )
-        if ttype == "t4":
-            return A.Compose(
-                [
-                    A.Lambda(
-                        image = center_crop_largest_square,
-                        mask = center_crop_largest_square
-                    ),
-                    A.RandomBrightnessContrast(
-                        brightness_limit = 0.2,
-                        contrast_limit = 0.2,
-                        p = 1.0
-                    ),
-                    A.RandomGamma(
-                        gamma_limit = (80, 120),
-                        p = 0.5
-                    ),
-                    A.Resize(self.dimensions, self.dimensions)
-                ],
-                additional_targets = {
-                    "mask1": "mask",
-                    "mask2": "mask",
-                    "mask3": "mask",
-                    "mask4": "mask",
-                    "mask5": "mask",
-                },
-                is_check_shapes = False
-            )
-        if ttype == "t5":
-            return A.Compose(
-                [
-                    A.Lambda(
-                        image = center_crop_largest_square,
-                        mask = center_crop_largest_square
-                    ),
-                    A.Rotate(
-                        limit = 20,
-                        border_mode = cv2.BORDER_CONSTANT,
-                        fill = 0,
-                        fill_mask = 0,
-                        p = 1.0
-                    ),
-                    A.Resize(self.dimensions, self.dimensions)
-                ],
-                additional_targets = {
-                    "mask1": "mask",
-                    "mask2": "mask",
-                    "mask3": "mask",
-                    "mask4": "mask",
-                    "mask5": "mask",
-                },
-                is_check_shapes = False
-            )
-        if ttype == "t6":
-            return A.Compose(
-                [
-                    A.Lambda(
-                        image = center_crop_largest_square,
-                        mask = center_crop_largest_square
-                    ),
-                    A.HueSaturationValue(
-                        hue_shift_limit = 10,
-                        sat_shift_limit = 20,
-                        val_shift_limit = 10,
-                        p = 0.8
-                    ),
-                    A.Resize(self.dimensions, self.dimensions)
-                ],
-                additional_targets = {
-                    "mask1": "mask",
-                    "mask2": "mask",
-                    "mask3": "mask",
-                    "mask4": "mask",
-                    "mask5": "mask",
-                },
-                is_check_shapes = False
-            )
-        if ttype == "t7":
-            return A.Compose(
-                [
-                    A.Lambda(
-                        image = center_crop_largest_square,
-                        mask = center_crop_largest_square
-                    ),
-                    A.ElasticTransform(
-                        alpha = 100,
-                        sigma = 10,
-                        border_mode = cv2.BORDER_CONSTANT,
-                        p = 1.0
-                    ),
-                    A.Resize(self.dimensions, self.dimensions)
-                ],
-                additional_targets = {
-                    "mask1": "mask",
-                    "mask2": "mask",
-                    "mask3": "mask",
-                    "mask4": "mask",
-                    "mask5": "mask",
-                },
-                is_check_shapes = False
-            )
+
+        return A.Compose(
+            transforms,
+            additional_targets = {
+                "mask1": "mask",
+                "mask2": "mask",
+                "mask3": "mask",
+                "mask4": "mask",
+            },
+            is_check_shapes = False,
+        )
 
     def __len__(self):
         return len(self.df)
+
     def __getitem__(self, index):
         row = self.df.loc[index]
+
+        # ================= Image =================
         image = cv2.imread(row.image_path, cv2.IMREAD_COLOR)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-        mask_paths = [row.ex_path, row.he_path, row.ma_path, row.se_path, row.od_path]
+        # ================= Masks =================
+        if row.dataset == "TJDR":
+            # ---- TJDR: color-coded single annotation ----
+            ann = cv2.imread(row.tjdr_ann_path, cv2.IMREAD_COLOR)
+            ann = cv2.cvtColor(ann, cv2.COLOR_BGR2RGB)
 
-        masks = []
-        for path in mask_paths:
-            if pd.isna(path):
-                height, width = image.shape[:2]
-                mask = np.zeros((height, width), dtype = np.uint8)
-            else:
-                mask = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
-                mask = (mask > 0).astype(np.uint8)
-            masks.append(mask)
+            r, g, b = ann[..., 0], ann[..., 1], ann[..., 2]
 
-        if self.transforms:
-            data = self.transforms(
-                image = image,
-                mask1 = masks[0],
-                mask2 = masks[1],
-                mask3 = masks[2],
-                mask4 = masks[3],
-                mask5 = masks[4]
-            )
-
-            image = data["image"]
             masks = [
-                data["mask1"],
-                data["mask2"],
-                data["mask3"],
-                data["mask4"],
-                data["mask5"]
+                ((r == 0)   & (g == 0)   & (b == 128)).astype(np.uint8),  # EX (blue)
+                ((r == 0)   & (g == 128) & (b == 128)).astype(np.uint8),  # HE (green)
+                ((r == 128) & (g == 128) & (b == 0)).astype(np.uint8),    # MA (yellow)
+                ((r == 128) & (g == 0)   & (b == 0)).astype(np.uint8),    # SE (red)
             ]
+        else:
+            # ---- DDR / IDRiD: per-class binary masks ----
+            masks = []
+            for cls in self.CLASSES:
+                path = getattr(row, self.MASK_COLUMNS[cls])
 
-        image = torch.from_numpy(image).permute(2, 0, 1).float() / 255.
-        masks = torch.stack([torch.from_numpy(m) for m in masks]).float()
+                if pd.isna(path):
+                    h, w = image.shape[:2]
+                    mask = np.zeros((h, w), dtype = np.uint8)
+                else:
+                    mask = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+                    mask = (mask > 0).astype(np.uint8)
 
+                masks.append(mask)
+        # ================= Transforms =================
+        data = self.transforms(
+            image = image,
+            mask1 = masks[0],  # EX
+            mask2 = masks[1],  # HE
+            mask3 = masks[2],  # MA
+            mask4 = masks[3],  # SE
+        )
+        image = torch.from_numpy(data["image"]).permute(2, 0, 1).float() / 255.0
+        masks = torch.stack(
+            [torch.from_numpy(data[f"mask{i+1}"]) for i in range(4)]
+        ).float()
         return image, masks
