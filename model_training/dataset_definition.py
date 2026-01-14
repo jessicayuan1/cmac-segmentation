@@ -152,10 +152,10 @@ class FundusSegmentationDataset(Dataset):
             r, g, b = ann[..., 0], ann[..., 1], ann[..., 2]
 
             masks = [
-                ((r == 0)   & (g == 0)   & (b == 128)).astype(np.uint8),  # EX (blue)
+                ((r == 128)   & (g == 0)   & (b == 0)).astype(np.uint8),  # EX (red)
                 ((r == 0)   & (g == 128) & (b == 128)).astype(np.uint8),  # HE (green)
                 ((r == 128) & (g == 128) & (b == 0)).astype(np.uint8),    # MA (yellow)
-                ((r == 128) & (g == 0)   & (b == 0)).astype(np.uint8),    # SE (red)
+                ((r == 0) & (g == 0)   & (b == 128)).astype(np.uint8),    # SE (blue)
             ]
         else:
             # ---- DDR / IDRiD: per-class binary masks ----

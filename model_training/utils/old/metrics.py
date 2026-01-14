@@ -1,5 +1,5 @@
 import torch
-#Important make sure that predictions and targets have order:[MA, HE, EX, SE, OD]
+# Important make sure that predictions and targets have order:[MA, HE, EX, SE, OD]
 def calculate_iou_per_class(predictions, targets, n_classes=5):
     """Calculate IoU for each class separately
     Order is same as in dataset

@@ -5,7 +5,7 @@ import os
 # Add the parent directory to the path to import utils
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.metrics import print_segmentation_metrics
+from model_training.utils.old.metrics import print_segmentation_metrics
 
 def test_metrics():
     """Test the print_segmentation_metrics function with dummy data"""
