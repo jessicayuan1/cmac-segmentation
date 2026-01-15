@@ -2,8 +2,22 @@ import torch
 import torch.nn as nn
 from .attention import PolarizedSelfAttention
 
+class DropPath(nn.Module):
+    def __init__(self, drop_prob=0.):
+        super().__init__()
+        self.drop_prob = drop_prob
+
+    def forward(self, x):
+        if self.drop_prob == 0. or not self.training:
+            return x
+        keep_prob = 1 - self.drop_prob
+        shape = (x.shape[0],) + (1,) * (x.ndim - 1)
+        random_tensor = keep_prob + torch.rand(shape, device=x.device)
+        binary_mask = random_tensor.floor()
+        return x / keep_prob * binary_mask
+    
 class MAC(nn.Module):
-    def __init__(self, n_channels, out_ch, expansion=4):
+    def __init__(self, n_channels, out_ch, expansion=4, drop_path=0.05):
         super().__init__()
         hidden_dim = n_channels * expansion
         
@@ -19,6 +33,7 @@ class MAC(nn.Module):
         self.bn3 = nn.BatchNorm2d(out_ch)
         
         self.act = nn.GELU()
+        self.drop_path = DropPath(drop_path)
         self.use_residual = (n_channels == out_ch)
     
     def forward(self, x):
