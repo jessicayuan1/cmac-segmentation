@@ -46,12 +46,15 @@ SCHEDULER_EPOCHS = 10
 TVERSKY_ALPHA = 0.5
 TVERSKY_BETA = 0.5
 TVERSKY_GAMMA = 1.3
+SMOOTH = 1e-6
 
-OUT_CHANNELS = 5
+CLAHE_CLIP = 2.0
+CLAHE_MODE = 'lab'
+
+CLASS_WEIGHTS = [1.0, 1.0, 1.0, 1.0]
+
+OUT_CHANNELS = 4
 IN_CHANNELS = 3
-
-WINDOW_SIZE = 8
-PATCH_SIZE = 4
 
 OUTPUT_DIR = Path(MODEL_NAME)
 
@@ -84,20 +87,22 @@ def main():
     loss_function = FocalTverskyLoss(
         alpha = TVERSKY_ALPHA, 
         beta = TVERSKY_BETA, 
-        gamma = TVERSKY_GAMMA)
+        gamma = TVERSKY_GAMMA,
+        smooth = SMOOTH,
+        class_weights = CLASS_WEIGHTS)
     
 
     # ================ Data =================
     train_dataloader, val_dataloader, test_dataloader = get_fundus_dataloaders(
-        resolution = 512,
-        batch_size = 16,
+        resolution = IMG_SIZE,
+        batch_size = BATCH_SIZE,
         data_csv_dir = "data_csv",
         use_clahe = True,
-        clahe_clip = 2.0,
+        clahe_clip = CLAHE_CLIP,
         clahe_tile = (8, 8),
-        clahe_mode = "lab",
+        clahe_mode = CLAHE_MODE,
         pin_memory = False,
-        num_workers = 1,
+        num_workers = NUM_WORKERS,
     )
     # ================= Metric Storage =================
     train_losses = []
