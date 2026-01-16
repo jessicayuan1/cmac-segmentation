@@ -1,4 +1,4 @@
-# **Techniques for Enhancing Microaneurysm Segmentation in Diabetic Retinopathy Fundus Imaging @ WAT.ai**
+# **Preprocessing and Training Techniques for Enhancing Microaneurysm Segmentation in Fundus Imaging @ WAT.ai**
 
 ### Overview
 
