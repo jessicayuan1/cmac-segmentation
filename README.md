@@ -20,14 +20,16 @@ This project investigates techniques for improving microaneurysm segmentation in
 ### Project Status/Progress
 - [x] Dataset Curation 
 - [x] Preprocessing and Augmentation Pipelines
-- [x] Visualizations
+- [x] Loss Function Development 
+- [x] Data Visualizations
 - [x] CMAC-Net Implementation in PyTorch
+- [x] Training Scripts 
 - [ ] Part 1: Baseline Training
 - [ ] Part 2: Preprocessing Variation Analysis
 - [ ] Part 3: Class Imbalance Aware Loss Function Analaysis
 - [ ] Part 4: Explicit Scalar Reweighting of Per-Class Loss Analysis
 - [ ] Get results on testing sets
-- [ ] Publish search paper!
+- [ ] Publish research paper!
 
 ---
 
