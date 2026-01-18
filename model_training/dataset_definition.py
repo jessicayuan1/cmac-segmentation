@@ -21,24 +21,48 @@ def apply_clahe(
     image_rgb,
     clip_limit = 2.5,
     tile_grid_size = (8, 8),
-    mode = "lab"   # "lab" or "green"
+    mode = "lab"   # "lab" or "green" or "casp"
 ):
     clahe = cv2.createCLAHE(
         clipLimit = clip_limit,
         tileGridSize = tile_grid_size
     )
+
     if mode == "lab":
         lab = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2LAB)
         l, a, b = cv2.split(lab)
         l = clahe.apply(l)
         lab = cv2.merge((l, a, b))
         return cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
+
     elif mode == "green":
         out = image_rgb.copy()
         out[:, :, 1] = clahe.apply(out[:, :, 1])
         return out
+    
+    elif mode == "casp":
+        out = image_rgb.copy()
+
+        # --- Green channel: CLAHE ---
+        out[:, :, 1] = clahe.apply(out[:, :, 1])
+
+        # --- Red & Blue: light stabilization ---
+        for c in [0, 2]:  # Red, Blue
+            channel = out[:, :, c]
+
+            # light blur (noise suppression)
+            channel = cv2.GaussianBlur(channel, ksize = (3, 3), sigmaX = 0)
+            # min–max normalization (avoid division by zero)
+            min_val = channel.min()
+            max_val = channel.max()
+            if max_val > min_val:
+                channel = ((channel - min_val) / (max_val - min_val) * 255).astype(channel.dtype)
+
+            out[:, :, c] = channel
+
+        return out
     else:
-        raise ValueError("mode must be 'lab' or 'green'")
+        raise ValueError("mode must be 'lab', 'green', or 'casp'")
     
 class CLAHETransform(A.ImageOnlyTransform):
     def __init__(self, dataset):
