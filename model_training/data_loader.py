@@ -41,6 +41,12 @@ def get_fundus_dataloaders(
     val_df   = pd.read_csv(Path(data_csv_dir) / "val_df.csv")
     test_df  = pd.read_csv(Path(data_csv_dir) / "test_df.csv")
 
+    DATASET_ROOT = REPO_ROOT  # or wherever your datasets are stored
+
+    train_df["image_path"] = train_df["image_path"].apply(lambda x: str(DATASET_ROOT / x))
+    val_df["image_path"]   = val_df["image_path"].apply(lambda x: str(DATASET_ROOT / x))
+    test_df["image_path"]  = test_df["image_path"].apply(lambda x: str(DATASET_ROOT / x))
+
     assert set(train_df.columns) == set(val_df.columns) == set(test_df.columns)
 
     train_ds = FundusSegmentationDataset(

@@ -29,6 +29,9 @@ from model_training.loss_functions import (
 from model_training.training_loop import train_one_epoch
 from model_training.valid_loop import valid_one_epoch
 
+#Help SLURM find external files
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 # =============== Global Constants  =================
 MODEL_NAME = ""
 
