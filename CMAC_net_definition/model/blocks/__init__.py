@@ -4,9 +4,10 @@ from .mac import MAC
 from .mlda import MLDA
 from .mmac import MMAC
 from .resize_cpcf import ResizeOp, CPCFModule
+from .hwd import HaarWaveletDownsampling
 
 __all__ = [
     'ConvBNReLU', 'DepthwiseSeparable',
     'PolarizedSelfAttention', 'MAC', 'MLDA', 'MMAC',
-    'ResizeOp', 'CPCFModule'
+    'ResizeOp', 'CPCFModule', 'HaarWaveletDownsampling'
 ]
