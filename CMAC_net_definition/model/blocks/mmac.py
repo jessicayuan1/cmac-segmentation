@@ -14,8 +14,15 @@ class MMAC(nn.Module):
         self.mlda = MLDA(out_ch)
         self.mac2 = MAC(out_ch, out_ch, drop_path = dp2)
 
+        # Only needed if in != out
+        self.proj = nn.Identity()
+        if n_channels != out_ch:
+            self.proj = nn.Conv2d(n_channels, out_ch, kernel_size = 1, bias = False)
+
     def forward(self, x):
+        shortcut = self.proj(x)
         x = self.mac1(x)
         x = self.mlda(x)
+        x = x + shortcut
         x = self.mac2(x)
         return x

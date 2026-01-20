@@ -7,7 +7,7 @@ def main():
     # Initialize Model
     model = CMACNet(in_channels = 3, 
                     out_channels = 4, 
-                    embed_dim = 96, 
+                    base_channels = 32, 
                     img_size = 512, 
                     depths = [1, 2, 3, 6])
     # Forward Pass
