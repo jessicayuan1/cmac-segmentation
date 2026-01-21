@@ -4,7 +4,7 @@
 import torch
 import torch.nn as nn
 from fvcore.nn import FlopCountAnalysis
-
+from torchinfo import summary
 def count_parameters(model: nn.Module):
     """
     Count total and trainable parameters in a model.
@@ -52,34 +52,17 @@ def analyze_model(
     print(f"FLOPs (forward pass): {flops:,}")
 
 if __name__ == "__main__":
-    from swin_unet_definition.model.swin_unet import SwinUNet
     from CMAC_net_definition.model.CMAC import CMACNet
-    
-    model = SwinUNet(
-        img_size = 512,
-        patch_size = 4,
-        embed_dim = 96,
-        depths = [2, 2, 6, 2], 
-        num_heads = [3, 6, 12, 24], 
-        window_size = 8,
-        mlp_ratio = 4,
-        out_channels = 5,
-        in_channels = 3
-    )
-    """
     model = CMACNet(
         in_channels = 3,
         out_channels = 5,
         embed_dim = 96,
-        depths = [2, 2, 6, 2],
-        img_size = 1024
+        depths = [1, 2, 3, 6],
+        img_size = 512
     )
-    """
+
 
     input_shape = (1, 3, 512, 512)
 
-    analyze_model(
-        model = model,
-        input_shape = input_shape,
-        device = "cpu"
-    )
+    summary(model, input_size=input_shape)
+    print(count_parameters(model))

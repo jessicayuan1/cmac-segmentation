@@ -1,5 +1,5 @@
 import torch
-from model.CMAC import CMACNet
+from CMAC_net_definition.model.CMAC import CMACNet
 
 def main():
     # Dummy RGB input
