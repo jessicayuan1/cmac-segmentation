@@ -69,8 +69,8 @@ def main():
     model = CMACNet(
         in_channels = IN_CHANNELS,
         out_channels = OUT_CHANNELS,
-        embed_dim = 96,
-        depths = [2, 2, 6, 2],
+        base_channels = 32,
+        depths = [1, 2, 3, 6],
         img_size = IMG_SIZE
     ).to(device = device)
     
@@ -118,9 +118,28 @@ def main():
 
     best_val_f1 = -1.0
 
+    # ================= CSV setup =================
+    csv_path = OUTPUT_DIR / f"{MODEL_NAME}.csv"
+
+    csv_exists = csv_path.exists()
+    csv_file = open(csv_path, mode = "a", newline = "")
+    csv_writer = csv.writer(csv_file)
+
+    if not csv_exists:
+        csv_writer.writerow([
+            "epoch",
+            "train_loss", "val_loss",
+            "train_iou", "val_iou",
+            "train_f1", "val_f1",
+            "train_recall", "val_recall"
+        ])
+        csv_file.flush()
+
     # ================= Training Loop =================
     for epoch in range(DEFAULT_EPOCHS):
-        print(f"\nEpoch [{epoch + 1}/{DEFAULT_EPOCHS}]")
+        print("\n" + "=" * 60)
+        print(f"Starting Epoch {epoch + 1} / {DEFAULT_EPOCHS}")
+        print("=" * 60, flush = True)
 
         train_loss, tr_iou, tr_f1, tr_rec = train_one_epoch(
             model = model,
@@ -153,6 +172,16 @@ def main():
 
         train_recalls.append(tr_rec)
         val_recalls.append(v_rec)
+
+        # ===== Save Metrics =====
+        csv_writer.writerow([
+            epoch + 1,
+            train_loss, val_loss,
+            tr_iou,     v_iou,
+            tr_f1,      v_f1,
+            tr_rec,     v_rec
+        ])
+        csv_file.flush()
 
         # ===== Save Best Model (Done if Validation F1 > Best F1 so far) =====
         if v_f1 > best_val_f1:
