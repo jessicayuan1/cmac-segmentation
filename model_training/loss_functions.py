@@ -142,7 +142,7 @@ class BCEwithLogitsLossMultiLabel(nn.Module):
     Returns:
         Scalar Binary Cross Entropy Loss (torch.Tensor)
     """
-    def __init__(self, class_weights = None, threshold = 0.3):
+    def __init__(self, class_weights=None, pos_weight = 2.0):
         super().__init__()
         
         if class_weights is None:
@@ -151,9 +151,15 @@ class BCEwithLogitsLossMultiLabel(nn.Module):
             "class_weights",
             torch.as_tensor(class_weights, dtype = torch.float32)
         )
-
-        self.threshold = threshold
-        self.bce = nn.BCEWithLogitsLoss(reduction = "none")
+        
+        # pos_weight: scalar or tensor of shape (C,)
+        # e.g., 2.0 means positive pixels count 2x as much
+        if pos_weight is not None:
+            if not isinstance(pos_weight, torch.Tensor):
+                pos_weight = torch.tensor([pos_weight] * 4)
+            self.register_buffer("pos_weight", pos_weight.float())
+        else:
+            self.pos_weight = None
 
     def forward(self, logits, targets):
         """
@@ -161,32 +167,26 @@ class BCEwithLogitsLossMultiLabel(nn.Module):
         targets: (B, C, H, W) with values in {0, 1}
         """
         targets = targets.float()
-
-        # Pixel-wise BCE
-        loss = self.bce(logits, targets)  # (B, C, H, W)
-
-        # Build hard mask from detached predictions
-        probs = torch.sigmoid(logits).detach()
-        mask = ((targets == 1) | (probs > self.threshold)).float()
-
-        # Apply mask
-        loss = loss * mask
-
-        # Sum over spatial dimensions
-        loss = loss.sum(dim = (2, 3))       # (B, C)
-        mask_sum = mask.sum(dim = (2, 3))   # (B, C)
-
-        # Normalize per sample per class
-        loss = loss / (mask_sum + 1e-6)
-
-        # Average over batch
-        loss = loss.mean(dim = 0)           # (C,)
-
-        # Apply class weights and final average
+        
+        # Apply pos_weight if provided
+        if self.pos_weight is not None:
+            # Reshape for broadcasting: (1, C, 1, 1)
+            pw = self.pos_weight.view(1, -1, 1, 1)
+            loss = F.binary_cross_entropy_with_logits(
+                logits, targets, reduction = 'none', pos_weight = pw
+            )
+        else:
+            loss = F.binary_cross_entropy_with_logits(
+                logits, targets, reduction = 'none'
+            )
+        
+        # Average over spatial dimensions, then batch
+        loss = loss.mean(dim = (2, 3)).mean(dim = 0)  # (C,)
+        
+        # Apply class weights
         weighted_loss = (loss * self.class_weights).mean()
-
+        
         return weighted_loss
-
     
 class DualLoss(nn.Module):
     """
