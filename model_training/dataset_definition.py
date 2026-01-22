@@ -212,7 +212,7 @@ class FundusSegmentationDataset(Dataset):
             mask3 = masks[2],  # MA
             mask4 = masks[3],  # SE
         )
-        image = torch.from_numpy(data["image"]).permute(2, 0, 1).float()
+        image = torch.from_numpy(data["image"]).permute(2, 0, 1).to(torch.float32)
         masks = torch.stack(
             [(torch.from_numpy(data[f"mask{i+1}"]) > 0.5).float() for i in range(4)]
         )

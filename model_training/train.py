@@ -198,7 +198,7 @@ def main():
     for epoch in range(DEFAULT_EPOCHS):
         print(f"\nEpoch [{epoch + 1}/{DEFAULT_EPOCHS}]")
 
-        train_loss, tr_iou, tr_f1, tr_rec = train_one_epoch(
+        train_loss, tr_iou, tr_f1, tr_rec, tr_mean_ious, tr_mean_f1, tr_mean_rec = train_one_epoch(
             model = model,
             dataloader = train_dataloader,
             optimizer = optimizer,
@@ -208,7 +208,7 @@ def main():
             n_classes = OUT_CHANNELS,
         )
 
-        val_loss, v_iou, v_f1, v_rec = valid_one_epoch(
+        val_loss, v_iou, v_f1, v_rec, v_mean_iou, v_mean_f1, v_mean_rec = valid_one_epoch(
             model = model,
             dataloader = val_dataloader,
             criterion = loss_function,
@@ -231,39 +231,31 @@ def main():
         val_recalls.append(v_rec)
 
         # ===== Save Best Model (Done if Validation F1 > Best F1 so far) =====
-        mean_tr_iou = sum(tr_iou) / len(tr_iou) if len(tr_iou) > 0 else 0.0
-        mean_tr_f1  = sum(tr_f1) / len(tr_f1) if len(tr_f1) > 0 else 0.0
-        mean_tr_rec = sum(tr_rec) / len(tr_rec) if len(tr_rec) > 0 else 0.0
-
-        mean_v_iou = sum(v_iou) / len(v_iou) if len(v_iou) > 0 else 0.0
-        mean_v_f1  = sum(v_f1) / len(v_f1) if len(v_f1) > 0 else 0.0
-        mean_v_rec = sum(v_rec) / len(v_rec) if len(v_rec) > 0 else 0.0
-
-        if mean_v_f1 > best_val_f1:
-            best_val_f1 = mean_v_f1
+        if v_mean_f1 > best_val_f1:
+            best_val_f1 = v_mean_f1
             torch.save(
                 model.state_dict(),
                 OUTPUT_DIR / "best_model.pt"
             )
-            print(f"Saved new best model (mean val_f1 = {mean_v_f1:.4f})")
+            print(f"Saved new best model (mean val_f1 = {v_mean_f1:.4f})")
 
         # ===== Store mean metrics =====
-        train_mean_f1s.append(float(np.nanmean(tr_f1)))
-        val_mean_f1s.append(mean_v_f1)
+        train_mean_f1s.append(tr_mean_f1)
+        val_mean_f1s.append(v_mean_f1)
 
-        train_mean_ious.append(float(np.nanmean(tr_iou)))
-        val_mean_ious.append(mean_v_iou)
+        train_mean_ious.append(tr_mean_ious)
+        val_mean_ious.append(v_mean_iou)
 
-        train_mean_recalls.append(float(np.nanmean(tr_rec)))
-        val_mean_recalls.append(mean_v_rec)
+        train_mean_recalls.append(tr_mean_rec)
+        val_mean_recalls.append(v_mean_rec)
 
         # ================= Save Metrics CSV =================
         mean_writer.writerow([
             epoch + 1,
             train_loss, val_loss,
-            mean_tr_iou, mean_v_iou,
-            mean_tr_f1,  mean_v_f1,
-            mean_tr_rec, mean_v_rec
+            tr_mean_ious, v_mean_iou,
+            tr_mean_f1,   v_mean_f1,
+            tr_mean_rec,  v_mean_rec
         ])
         mean_f.flush()
         for c, cls in enumerate(CLASSES):

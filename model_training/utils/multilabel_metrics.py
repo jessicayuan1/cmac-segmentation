@@ -7,123 +7,117 @@ import torch
 
 def calculate_iou_per_class(predictions, targets, thresholds):
     """
+    Args:
+        predictions: (N, 4, H, W) raw logits
+        targets:     (N, 4, H, W) binary masks
+        thresholds:  float or list of 4 floats
+
     Returns:
-        class_ious: list of 4 IoU values (one per class)
-        sample_ious: (N, 4) tensor of per-sample IoUs
+        class_ious: list of 4 floats (or None if undefined)
+        mean_iou: average IoU across all valid pixels and classes
     """
     targets = targets.bool()
     probs = torch.sigmoid(predictions)
-    
-    N = predictions.shape[0]
-    sample_ious = torch.zeros(N, 4)
-    
-    for c in range(4):
+
+    C = predictions.shape[1]
+    class_ious = []
+    all_ious = []
+
+    for c in range(C):
         thresh = thresholds[c] if isinstance(thresholds, (list, tuple)) else thresholds
         pred = (probs[:, c] > thresh)
         gt = targets[:, c]
-        
-        for i in range(N):
-            pred_i = pred[i]
-            gt_i = gt[i]
-            
-            tp = (pred_i & gt_i).float().sum()
-            fp = (pred_i & ~gt_i).float().sum()
-            fn = (~pred_i & gt_i).float().sum()
-            
-            denom = tp + fp + fn
-            
-            if denom > 0:
-                sample_ious[i, c] = tp / denom
-            else:
-                # No ground truth and no prediction for this sample/class
-                sample_ious[i, c] = float('nan')
-    
-    # Class-wise IoU: average across samples (ignoring NaNs)
-    class_ious = []
-    for c in range(4):
-        valid_ious = sample_ious[:, c][~torch.isnan(sample_ious[:, c])]
-        if len(valid_ious) > 0:
-            class_ious.append(valid_ious.mean().item())
+
+        tp = (pred & gt).float().sum()
+        fp = (pred & ~gt).float().sum()
+        fn = (~pred & gt).float().sum()
+
+        denom = tp + fp + fn
+
+        if denom > 0:
+            iou = tp / denom
+            class_ious.append(iou.item())
+            all_ious.append(iou)
         else:
             class_ious.append(None)
-    
-    return class_ious, sample_ious
 
+    if all_ious:
+        mean_iou = torch.stack(all_ious).mean().item()
+    else:
+        mean_iou = None
+
+    return class_ious, mean_iou
 
 def calculate_f1_per_class(predictions, targets, thresholds):
+    """
+    Computes per-class and mean F1 (Dice) score over the entire dataset.
+
+    Returns:
+        class_f1s: list of 4 floats or None
+        mean_f1: scalar mean F1 over valid classes
+    """
     targets = targets.bool()
     probs = torch.sigmoid(predictions)
-    
-    N = predictions.shape[0]
-    sample_f1s = torch.zeros(N, 4)
-    
-    for c in range(4):
+
+    C = predictions.shape[1]
+    class_f1s = []
+    valid_f1s = []
+
+    for c in range(C):
         thresh = thresholds[c] if isinstance(thresholds, (list, tuple)) else thresholds
         pred = (probs[:, c] > thresh)
         gt = targets[:, c]
-        
-        for i in range(N):
-            pred_i = pred[i]
-            gt_i = gt[i]
-            
-            tp = (pred_i & gt_i).float().sum()
-            fp = (pred_i & ~gt_i).float().sum()
-            fn = (~pred_i & gt_i).float().sum()
-            
-            denom = 2 * tp + fp + fn
-            
-            if denom > 0:
-                sample_f1s[i, c] = 2 * tp / denom
-            else:
-                sample_f1s[i, c] = float('nan')
-    
-    class_f1s = []
-    for c in range(4):
-        valid_f1s = sample_f1s[:, c][~torch.isnan(sample_f1s[:, c])]
-        if len(valid_f1s) > 0:
-            class_f1s.append(valid_f1s.mean().item())
+
+        tp = (pred & gt).float().sum()
+        fp = (pred & ~gt).float().sum()
+        fn = (~pred & gt).float().sum()
+
+        denom = 2 * tp + fp + fn
+
+        if denom > 0:
+            f1 = 2 * tp / denom
+            class_f1s.append(f1.item())
+            valid_f1s.append(f1)
         else:
             class_f1s.append(None)
-    
-    return class_f1s, sample_f1s
 
+    mean_f1 = torch.stack(valid_f1s).mean().item() if valid_f1s else None
+    return class_f1s, mean_f1
 
 def calculate_recall_per_class(predictions, targets, thresholds):
+    """
+    Computes per-class and mean Recall over the entire dataset.
+
+    Returns:
+        class_recalls: list of 4 floats or None
+        mean_recall: scalar mean Recall over valid classes
+    """
     targets = targets.bool()
     probs = torch.sigmoid(predictions)
-    
-    N = predictions.shape[0]
-    sample_recalls = torch.zeros(N, 4)
-    
-    for c in range(4):
+
+    C = predictions.shape[1]
+    class_recalls = []
+    valid_recalls = []
+
+    for c in range(C):
         thresh = thresholds[c] if isinstance(thresholds, (list, tuple)) else thresholds
         pred = (probs[:, c] > thresh)
         gt = targets[:, c]
-        
-        for i in range(N):
-            pred_i = pred[i]
-            gt_i = gt[i]
-            
-            tp = (pred_i & gt_i).float().sum()
-            fn = (~pred_i & gt_i).float().sum()
-            
-            denom = tp + fn
-            
-            if denom > 0:
-                sample_recalls[i, c] = tp / denom
-            else:
-                sample_recalls[i, c] = float('nan')
-    
-    class_recalls = []
-    for c in range(4):
-        valid_recalls = sample_recalls[:, c][~torch.isnan(sample_recalls[:, c])]
-        if len(valid_recalls) > 0:
-            class_recalls.append(valid_recalls.mean().item())
+
+        tp = (pred & gt).float().sum()
+        fn = (~pred & gt).float().sum()
+
+        denom = tp + fn
+
+        if denom > 0:
+            recall = tp / denom
+            class_recalls.append(recall.item())
+            valid_recalls.append(recall)
         else:
             class_recalls.append(None)
-    
-    return class_recalls, sample_recalls
 
+    mean_recall = torch.stack(valid_recalls).mean().item() if valid_recalls else None
+    return class_recalls, mean_recall
 
 def print_segmentation_metrics(predictions, targets, thresholds=0.5):
     """
