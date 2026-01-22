@@ -1,18 +1,20 @@
 """
 This is the main training entry point.
-- Global constants
+This file:
+- Defines global constants
 - Builds dataloaders
-- Initializes model, loss, optimizer
+- Initializes model, loss function, and optimizer
 - Runs training/validation loop
+- Returns model parameters and metric statistics
 """
-# Standard Imports
+# Standard Library Imports
 import os
 import sys
 import time
 import csv
 from pathlib import Path
 
-# Third-Party Imports
+# Third-Party Library Imports
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -29,34 +31,37 @@ from model_training.loss_functions import (
 from model_training.training_loop import train_one_epoch
 from model_training.valid_loop import valid_one_epoch
 
-# =============== Global Constants  =================
-MODEL_NAME = ""
+# =============== Global Constants =================
+MODEL_NAME = "test"
 
-IMG_SIZE = 512
-DEFAULT_EPOCHS = 150
+IMG_SIZE = 768
+DEFAULT_EPOCHS = 25
 LEARNING_RATE = 1e-5
 DEFAULT_SEED = 42
 
-BATCH_SIZE = 16
-NUM_WORKERS = 4
+BATCH_SIZE = 8
+NUM_WORKERS = 6
 
 SCHEDULER_FACTOR = 0.5
 SCHEDULER_EPOCHS = 10
 
-TVERSKY_ALPHA = 0.5
-TVERSKY_BETA = 0.5
+W_FTL = 0.5
+W_BCE = 0.5
+
+TVERSKY_ALPHA = 0.2
+TVERSKY_BETA = 0.8
 TVERSKY_GAMMA = 1.3
 SMOOTH = 1e-6
 
 CLAHE_CLIP = 2.0
-CLAHE_MODE = 'lab'
+CLAHE_MODE = 'green'
 
 CLASS_WEIGHTS = [1.0, 1.0, 1.0, 1.0]
 
 OUT_CHANNELS = 4
 IN_CHANNELS = 3
 
-OUTPUT_DIR = Path(MODEL_NAME)
+OUTPUT_DIR = Path("runs") / Path(MODEL_NAME)
 
 # =============== Main ================
 def main():
@@ -65,12 +70,15 @@ def main():
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     OUTPUT_DIR.mkdir(parents = True, exist_ok = True)
 
+    print("CUDA available:", torch.cuda.is_available())
+    print("Device:", torch.cuda.get_device_name(0))
+
     # ============== Model ===============
     model = CMACNet(
         in_channels = IN_CHANNELS,
         out_channels = OUT_CHANNELS,
-        embed_dim = 96,
-        depths = [2, 2, 6, 2],
+        base_channels = 32,
+        depths = [1, 2, 3, 6],
         img_size = IMG_SIZE
     ).to(device = device)
     
@@ -84,12 +92,14 @@ def main():
     )
 
     # ============== Loss =================
-    loss_function = FocalTverskyLoss(
+    loss_function = DualLoss(
+        class_weights = CLASS_WEIGHTS,
+        w_ft = W_FTL,
+        w_bce = W_BCE,
         alpha = TVERSKY_ALPHA, 
         beta = TVERSKY_BETA, 
         gamma = TVERSKY_GAMMA,
-        smooth = SMOOTH,
-        class_weights = CLASS_WEIGHTS)
+        smooth = SMOOTH,).to(device)
     
 
     # ================ Data =================
@@ -101,9 +111,13 @@ def main():
         clahe_clip = CLAHE_CLIP,
         clahe_tile = (8, 8),
         clahe_mode = CLAHE_MODE,
-        pin_memory = False,
+        pin_memory = True,
         num_workers = NUM_WORKERS,
     )
+    print("Train samples:", len(train_dataloader.dataset))
+    print("Train batches:", len(train_dataloader))
+    print("Val samples:", len(val_dataloader.dataset))
+    print("Val batches:", len(val_dataloader))
     # ================= Metric Storage =================
     train_losses = []
     val_losses = []
@@ -155,13 +169,14 @@ def main():
         val_recalls.append(v_rec)
 
         # ===== Save Best Model (Done if Validation F1 > Best F1 so far) =====
-        if v_f1 > best_val_f1:
-            best_val_f1 = v_f1
+        mean_v_f1 = sum(v_f1) / len(v_f1)
+        if mean_v_f1 > best_val_f1:
+            best_val_f1 = mean_v_f1
             torch.save(
                 model.state_dict(),
                 OUTPUT_DIR / "best_model.pt"
             )
-            print(f"Saved new best model (val_f1 = {v_f1:.4f})")
+            print(f"Saved new best model (mean val_f1 = {mean_v_f1:.4f})")
     # ================= Save Metrics CSV =================
     csv_path = OUTPUT_DIR / f"{MODEL_NAME}.csv"
     with open(csv_path, mode = "w", newline = "") as f:

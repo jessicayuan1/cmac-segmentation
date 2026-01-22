@@ -72,7 +72,10 @@ class FocalTverskyLoss(nn.Module):
             class_weights = torch.ones(4)
         self.register_buffer("class_weights", torch.as_tensor(class_weights, dtype = torch.float32))
         
-        self.smooth = smooth
+        self.register_buffer(
+            "smooth",
+            torch.tensor(smooth, dtype = torch.float32)
+        )   
 
     def forward(self, logits, targets):
         """

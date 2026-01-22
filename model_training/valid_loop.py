@@ -1,12 +1,12 @@
 import torch
 from model_training.utils.multilabel_metrics import (
-    iou_per_class,
-    f1_per_class,
-    recall_per_class,
+    calculate_iou_per_class,
+    calculate_f1_per_class,
+    calculate_recall_per_class,
 )
 
 # Validate for one epoch
-def valid_one_epoch(model, dataloader, criterion, device, n_classes = 5):
+def valid_one_epoch(model, dataloader, criterion, device, n_classes = 4):
     model.eval()
     val_loss = 0.0
     total_samples = 0
@@ -27,9 +27,9 @@ def valid_one_epoch(model, dataloader, criterion, device, n_classes = 5):
 
             val_loss += loss.item() * imgs.size(0)
             
-            batch_ious = iou_per_class(outputs, masks, num_classes = 5)
-            batch_f1s = f1_per_class(outputs, masks, num_classes = 5)
-            batch_recalls = recall_per_class(outputs, masks, num_classes = 5)
+            batch_ious = calculate_iou_per_class(outputs, masks)
+            batch_f1s = calculate_f1_per_class(outputs, masks)
+            batch_recalls = calculate_recall_per_class(outputs, masks)
 
             # Accumulate metrics
             for i in range(n_classes):

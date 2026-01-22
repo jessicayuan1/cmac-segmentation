@@ -1,13 +1,13 @@
 import torch
 import tqdm
 from model_training.utils.multilabel_metrics import (
-    iou_per_class,
-    f1_per_class,
-    recall_per_class,
+    calculate_iou_per_class,
+    calculate_f1_per_class,
+    calculate_recall_per_class,
 )
 
 #Train for one epoch
-def train_one_epoch(model, dataloader, optimizer, criterion, device, n_classes = 5):
+def train_one_epoch(model, dataloader, optimizer, criterion, device, n_classes = 4):
     model.train()
     running_loss = 0.0
     total_samples = 0
@@ -35,9 +35,9 @@ def train_one_epoch(model, dataloader, optimizer, criterion, device, n_classes =
 
         # Calculate metrics per batch
         with torch.no_grad():
-            batch_ious = iou_per_class(outputs, masks, num_classes = 5)
-            batch_f1s = f1_per_class(outputs, masks, num_classes = 5)
-            batch_recalls = recall_per_class(outputs, masks, num_classes = 5)
+            batch_ious = calculate_iou_per_class(outputs, masks)
+            batch_f1s = calculate_f1_per_class(outputs, masks)
+            batch_recalls = calculate_recall_per_class(outputs, masks)
 
             for i in range(n_classes):
                 class_ious[i] += batch_ious[i] * batch_size
