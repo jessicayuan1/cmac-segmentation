@@ -72,7 +72,10 @@ class FocalTverskyLoss(nn.Module):
             class_weights = torch.ones(4)
         self.register_buffer("class_weights", torch.as_tensor(class_weights, dtype = torch.float32))
         
-        self.smooth = smooth
+        self.register_buffer(
+            "smooth",
+            torch.tensor(smooth, dtype = torch.float32)
+        )   
 
     def forward(self, logits, targets):
         """
@@ -119,7 +122,7 @@ class FocalTverskyLoss(nn.Module):
 
 class BCEwithLogitsLossMultiLabel(nn.Module):
     """
-    Multi-Label Binary Cross Entropy (BCE) Loss for Semantic Segmentation.
+    Multi-Label MASKED Binary Cross Entropy (BCE) Loss for Semantic Segmentation.
     Loss is applied to multi-channel segmentation masks where each channel 
     represents a separate binary mask.
 
@@ -139,32 +142,51 @@ class BCEwithLogitsLossMultiLabel(nn.Module):
     Returns:
         Scalar Binary Cross Entropy Loss (torch.Tensor)
     """
-    def __init__(self, class_weights = None):
+    def __init__(self, class_weights=None, pos_weight = 2.0):
         super().__init__()
         
         if class_weights is None:
             class_weights = torch.ones(4)
-        self.register_buffer("class_weights", torch.as_tensor(class_weights, dtype = torch.float32))
+        self.register_buffer(
+            "class_weights",
+            torch.as_tensor(class_weights, dtype = torch.float32)
+        )
         
-        self.bce = nn.BCEWithLogitsLoss(reduction = "none")
+        # pos_weight: scalar or tensor of shape (C,)
+        # e.g., 2.0 means positive pixels count 2x as much
+        if pos_weight is not None:
+            if not isinstance(pos_weight, torch.Tensor):
+                pos_weight = torch.tensor([pos_weight] * 4)
+            self.register_buffer("pos_weight", pos_weight.float())
+        else:
+            self.pos_weight = None
 
     def forward(self, logits, targets):
         """
         logits:  (B, C, H, W)
-        targets: (B, C, H, W)
+        targets: (B, C, H, W) with values in {0, 1}
         """
-        loss = self.bce(logits, targets.float())  # (B, C, H, W)
+        targets = targets.float()
         
-        # Average over spatial dimensions
-        loss = loss.mean(dim = (2, 3))   # (B, C)
-        # Average over batch
-        loss = loss.mean(dim = 0)        # (C,)
+        # Apply pos_weight if provided
+        if self.pos_weight is not None:
+            # Reshape for broadcasting: (1, C, 1, 1)
+            pw = self.pos_weight.view(1, -1, 1, 1)
+            loss = F.binary_cross_entropy_with_logits(
+                logits, targets, reduction = 'none', pos_weight = pw
+            )
+        else:
+            loss = F.binary_cross_entropy_with_logits(
+                logits, targets, reduction = 'none'
+            )
         
-        # Apply class weights and final averaging
+        # Average over spatial dimensions, then batch
+        loss = loss.mean(dim = (2, 3)).mean(dim = 0)  # (C,)
+        
+        # Apply class weights
         weighted_loss = (loss * self.class_weights).mean()
         
         return weighted_loss
-
     
 class DualLoss(nn.Module):
     """
