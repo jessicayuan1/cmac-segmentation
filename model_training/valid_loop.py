@@ -1,19 +1,21 @@
 import torch
+import numpy as np
 from model_training.utils.multilabel_metrics import (
-    iou_per_class,
-    f1_per_class,
-    recall_per_class,
+    calculate_iou_per_class,
+    calculate_f1_per_class,
+    calculate_recall_per_class,
 )
 
 # Validate for one epoch
-def valid_one_epoch(model, dataloader, criterion, device, n_classes = 5):
+def valid_one_epoch(model, dataloader, criterion, device, thresholds, n_classes = 4):
     model.eval()
     val_loss = 0.0
     total_samples = 0
 
-    class_ious = [0.0 for _ in range(n_classes)]
-    class_f1s = [0.0 for _ in range(n_classes)]
-    class_recalls = [0.0 for _ in range(n_classes)]
+    # Store metrics per class as lists to accumulate across batches
+    class_ious = [[] for _ in range(n_classes)]
+    class_f1s = [[] for _ in range(n_classes)]
+    class_recalls = [[] for _ in range(n_classes)]
     
     with torch.no_grad():
         for imgs, masks in dataloader:
@@ -27,20 +29,36 @@ def valid_one_epoch(model, dataloader, criterion, device, n_classes = 5):
 
             val_loss += loss.item() * imgs.size(0)
             
-            batch_ious = iou_per_class(outputs, masks, num_classes = 5)
-            batch_f1s = f1_per_class(outputs, masks, num_classes = 5)
-            batch_recalls = recall_per_class(outputs, masks, num_classes = 5)
+            batch_ious = calculate_iou_per_class(outputs, masks, thresholds)
+            batch_f1s = calculate_f1_per_class(outputs, masks, thresholds)
+            batch_recalls = calculate_recall_per_class(outputs, masks, thresholds)
 
-            # Accumulate metrics
             for i in range(n_classes):
-                class_ious[i] += batch_ious[i] * batch_size
-                class_f1s[i] += batch_f1s[i] * batch_size
-                class_recalls[i] += batch_recalls[i] * batch_size
+                if batch_ious[i] is not None:
+                    class_ious[i].append(batch_ious[i])
+
+                if batch_f1s[i] is not None:
+                    class_f1s[i].append(batch_f1s[i])
+
+                if batch_recalls[i] is not None:
+                    class_recalls[i].append(batch_recalls[i])
     
     # Aggregate results
     epoch_loss = val_loss / total_samples
-    epoch_ious = [v / total_samples for v in class_ious]
-    epoch_f1s = [v / total_samples for v in class_f1s]
-    epoch_recalls = [v / total_samples for v in class_recalls]
+
+    epoch_ious = [
+        sum(class_ious[i]) / len(class_ious[i]) if len(class_ious[i]) > 0 else 0.0
+        for i in range(n_classes)
+    ]
+
+    epoch_f1s = [
+        sum(class_f1s[i]) / len(class_f1s[i]) if len(class_f1s[i]) > 0 else 0.0
+        for i in range(n_classes)
+    ]
+
+    epoch_recalls = [
+        sum(class_recalls[i]) / len(class_recalls[i]) if len(class_recalls[i]) > 0 else 0.0
+        for i in range(n_classes)
+    ]
     
     return epoch_loss, epoch_ious, epoch_f1s, epoch_recalls

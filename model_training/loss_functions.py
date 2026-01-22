@@ -72,7 +72,10 @@ class FocalTverskyLoss(nn.Module):
             class_weights = torch.ones(4)
         self.register_buffer("class_weights", torch.as_tensor(class_weights, dtype = torch.float32))
         
-        self.smooth = smooth
+        self.register_buffer(
+            "smooth",
+            torch.tensor(smooth, dtype = torch.float32)
+        )   
 
     def forward(self, logits, targets):
         """
@@ -119,7 +122,7 @@ class FocalTverskyLoss(nn.Module):
 
 class BCEwithLogitsLossMultiLabel(nn.Module):
     """
-    Multi-Label Binary Cross Entropy (BCE) Loss for Semantic Segmentation.
+    Multi-Label MASKED Binary Cross Entropy (BCE) Loss for Semantic Segmentation.
     Loss is applied to multi-channel segmentation masks where each channel 
     represents a separate binary mask.
 
@@ -139,30 +142,49 @@ class BCEwithLogitsLossMultiLabel(nn.Module):
     Returns:
         Scalar Binary Cross Entropy Loss (torch.Tensor)
     """
-    def __init__(self, class_weights = None):
+    def __init__(self, class_weights = None, threshold = 0.3):
         super().__init__()
         
         if class_weights is None:
             class_weights = torch.ones(4)
-        self.register_buffer("class_weights", torch.as_tensor(class_weights, dtype = torch.float32))
-        
+        self.register_buffer(
+            "class_weights",
+            torch.as_tensor(class_weights, dtype = torch.float32)
+        )
+
+        self.threshold = threshold
         self.bce = nn.BCEWithLogitsLoss(reduction = "none")
 
     def forward(self, logits, targets):
         """
         logits:  (B, C, H, W)
-        targets: (B, C, H, W)
+        targets: (B, C, H, W) with values in {0, 1}
         """
-        loss = self.bce(logits, targets.float())  # (B, C, H, W)
-        
-        # Average over spatial dimensions
-        loss = loss.mean(dim = (2, 3))   # (B, C)
+        targets = targets.float()
+
+        # Pixel-wise BCE
+        loss = self.bce(logits, targets)  # (B, C, H, W)
+
+        # Build hard mask from detached predictions
+        probs = torch.sigmoid(logits).detach()
+        mask = ((targets == 1) | (probs > self.threshold)).float()
+
+        # Apply mask
+        loss = loss * mask
+
+        # Sum over spatial dimensions
+        loss = loss.sum(dim = (2, 3))       # (B, C)
+        mask_sum = mask.sum(dim = (2, 3))   # (B, C)
+
+        # Normalize per sample per class
+        loss = loss / (mask_sum + 1e-6)
+
         # Average over batch
-        loss = loss.mean(dim = 0)        # (C,)
-        
-        # Apply class weights and final averaging
+        loss = loss.mean(dim = 0)           # (C,)
+
+        # Apply class weights and final average
         weighted_loss = (loss * self.class_weights).mean()
-        
+
         return weighted_loss
 
     
