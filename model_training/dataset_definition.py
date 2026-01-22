@@ -10,18 +10,23 @@ import torch
 from torch.utils.data import Dataset
 import albumentations as A
 
-def center_crop_largest_square(image, **kwargs):
-    h, w = image.shape[:2]
+def center_crop_largest_square(x, **kwargs):
+    """
+    Albumentations-compatible:
+    - Pure center crop to the largest square from the center
+    - Works for both image (H, W, 3) and mask (H, W)
+    """
+    h, w = x.shape[:2]
     min_dim = min(h, w)
     top = (h - min_dim) // 2
     left = (w - min_dim) // 2
-    return image[top : top + min_dim, left:left + min_dim]
+    return x[top : top + min_dim, left : left + min_dim]
 
 def apply_clahe(
     image_rgb,
     clip_limit = 2.5,
     tile_grid_size = (8, 8),
-    mode = "lab"   # "lab" or "green" or "casp"
+    mode = "casp"   # "lab" or "green" or "casp"
 ):
     clahe = cv2.createCLAHE(
         clipLimit = clip_limit,
@@ -63,6 +68,7 @@ def apply_clahe(
         return out
     else:
         raise ValueError("mode must be 'lab', 'green', or 'casp'")
+
     
 class CLAHETransform(A.ImageOnlyTransform):
     def __init__(self, dataset):
@@ -125,8 +131,26 @@ class FundusSegmentationDataset(Dataset):
                 image = center_crop_largest_square,
                 mask = center_crop_largest_square
             ),
+        ]
+
+        if self.transform_type == "train":
+            transforms.extend([
+                A.HorizontalFlip(p = 0.5),
+                A.VerticalFlip(p = 0.5),
+                A.Affine(
+                    translate_percent = 0.08,
+                    scale = (0.88, 1.12),
+                    rotate = (-15, 15),
+                    border_mode = cv2.BORDER_CONSTANT,
+                    fill = 0,
+                    fill_mask = 0,
+                    p = 0.7,
+                ),
+            ])
+
+        transforms.extend([
             A.Resize(
-                self.dimensions, 
+                self.dimensions,
                 self.dimensions,
                 interpolation = cv2.INTER_LINEAR,
                 mask_interpolation = cv2.INTER_NEAREST
@@ -136,24 +160,7 @@ class FundusSegmentationDataset(Dataset):
                 mean = (0.485, 0.456, 0.406),
                 std = (0.229, 0.224, 0.225),
             )
-        ]
-
-        if self.transform_type == "train":
-            transforms.extend(
-                [
-                    A.HorizontalFlip(p = 0.5),
-                    A.VerticalFlip(p = 0.5),
-                    A.Affine(
-                    translate_percent = 0.08,
-                    scale = (0.88, 1.12),
-                    rotate = (-15, 15),
-                    border_mode = cv2.BORDER_CONSTANT,
-                    fill = 0,
-                    fill_mask = 0,
-                    p = 0.7,
-                )
-                ]
-            )
+        ])
 
         return A.Compose(
             transforms,

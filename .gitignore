@@ -6,3 +6,4 @@ TJDR
 .DS_Store
 train.sh
 runs
+test.py
