@@ -36,22 +36,22 @@ from model_training.valid_loop import valid_one_epoch
 MODEL_NAME = "test"
 
 IMG_SIZE = 512
-DEFAULT_EPOCHS = 2
+DEFAULT_EPOCHS = 100
 LEARNING_RATE = 0.008
-DEFAULT_SEED = 42
+DEFAULT_SEED = 73
 
 BATCH_SIZE = 8
 NUM_WORKERS = 6
 
-W_FTL = 0.5
-W_BCE = 0.5
+W_FTL = 0.7
+W_BCE = 0.3
 
 TVERSKY_ALPHA = 0.2
 TVERSKY_BETA = 0.8
 TVERSKY_GAMMA = 1.3
 SMOOTH = 1e-6
 
-CLAHE_CLIP = 2.0
+CLAHE_CLIP = 2.5
 CLAHE_MODE = 'green'
 
 CLASS_WEIGHTS = [1.0, 1.0, 1.0, 1.0]
@@ -118,18 +118,38 @@ def main():
     print("Val samples:", len(val_dataloader.dataset))
     print("Val batches:", len(val_dataloader))
 
-    # ========== PASTE THIS WHOLE BLOCK HERE ==========
+    # ========== Sanity Check ==========
     images, targets = next(iter(train_dataloader))
     images, targets = images.to(device), targets.to(device)
-    print(f"\nTargets shape: {targets.shape}")
-    print(f"Positive pixels per class: {targets.sum(dim=(0,2,3))}")
-    
+
+    print("\n[TRAIN SANITY CHECK]")
+    print("Targets shape:", targets.shape)
+    print("Positive pixels per class:", targets.sum(dim = (0,2,3)))
+    print("Unique target values:", torch.unique(targets))
+
     with torch.no_grad():
         logits = model(images)
         probs = torch.sigmoid(logits)
-        print(f"Probs range: [{probs.min():.3f}, {probs.max():.3f}]")
-        print(f"Pixels > 0.5: {(probs > 0.5).sum()}")
-    # ========== END PASTE ==========
+        print(f"Train probs range: [{probs.min():.3f}, {probs.max():.3f}]")
+        print("Train max prob per class:",
+            probs.max(dim = 0).values.max(dim = 1).values)
+        print("Train pixels > 0.5:", (probs > 0.5).sum())
+
+    images_v, targets_v = next(iter(val_dataloader))
+    images_v, targets_v = images_v.to(device), targets_v.to(device)
+
+    print("\n[VAL SANITY CHECK]")
+    print("Targets shape:", targets_v.shape)
+    print("Positive pixels per class:", targets_v.sum(dim = (0,2,3)))
+    print("Unique target values:", torch.unique(targets_v))
+
+    with torch.no_grad():
+        logits_v = model(images_v)
+        probs_v = torch.sigmoid(logits_v)
+        print(f"Val probs range: [{probs_v.min():.3f}, {probs_v.max():.3f}]")
+        print("Val max prob per class:",
+            probs_v.max(dim = 0).values.max(dim = 1).values)
+        print("Val pixels > 0.5:", (probs_v > 0.5).sum())
 
     # ================= Metric Storage =================
     train_losses = []
