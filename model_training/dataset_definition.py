@@ -125,8 +125,17 @@ class FundusSegmentationDataset(Dataset):
                 image = center_crop_largest_square,
                 mask = center_crop_largest_square
             ),
-            A.Resize(self.dimensions, self.dimensions),
+            A.Resize(
+                self.dimensions, 
+                self.dimensions,
+                interpolation = cv2.INTER_LINEAR,
+                mask_interpolation = cv2.INTER_NEAREST
+            ),
             CLAHETransform(self),
+            A.Normalize(
+                mean = (0.485, 0.456, 0.406),
+                std = (0.229, 0.224, 0.225),
+            )
         ]
 
         if self.transform_type == "train":
@@ -203,8 +212,8 @@ class FundusSegmentationDataset(Dataset):
             mask3 = masks[2],  # MA
             mask4 = masks[3],  # SE
         )
-        image = torch.from_numpy(data["image"]).permute(2, 0, 1).float() / 255.0
+        image = torch.from_numpy(data["image"]).permute(2, 0, 1).float()
         masks = torch.stack(
-            [torch.from_numpy(data[f"mask{i+1}"]) for i in range(4)]
-        ).float()
+            [(torch.from_numpy(data[f"mask{i+1}"]) > 0.5).float() for i in range(4)]
+        )
         return image, masks
