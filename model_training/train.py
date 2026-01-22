@@ -19,6 +19,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 import torch.optim as optim
+import numpy as np
 
 # Local Imports
 from CMAC_net_definition.model.CMAC import CMACNet
@@ -34,16 +35,13 @@ from model_training.valid_loop import valid_one_epoch
 # =============== Global Constants =================
 MODEL_NAME = "test"
 
-IMG_SIZE = 768
-DEFAULT_EPOCHS = 25
-LEARNING_RATE = 1e-5
+IMG_SIZE = 512
+DEFAULT_EPOCHS = 2
+LEARNING_RATE = 0.008
 DEFAULT_SEED = 42
 
 BATCH_SIZE = 8
 NUM_WORKERS = 6
-
-SCHEDULER_FACTOR = 0.5
-SCHEDULER_EPOCHS = 10
 
 W_FTL = 0.5
 W_BCE = 0.5
@@ -57,6 +55,7 @@ CLAHE_CLIP = 2.0
 CLAHE_MODE = 'green'
 
 CLASS_WEIGHTS = [1.0, 1.0, 1.0, 1.0]
+THRESHOLDS = [0.3, 0.3, 0.3, 0.3]
 
 OUT_CHANNELS = 4
 IN_CHANNELS = 3
@@ -82,14 +81,14 @@ def main():
         img_size = IMG_SIZE
     ).to(device = device)
     
-    # ============ Optimizer / Scheduler =================
-    optimizer = torch.optim.Adam(params = model.parameters(), lr = LEARNING_RATE)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer,
-        mode = "min",
-        factor = SCHEDULER_FACTOR,
-        patience = SCHEDULER_EPOCHS,
-    )
+    # ============ Optimizer =============
+    optimizer = torch.optim.SGD(
+        params = model.parameters(), 
+        lr = LEARNING_RATE,
+        momentum = 0.9,
+        weight_decay = 1e-4,
+        nesterov = False
+        )
 
     # ============== Loss =================
     loss_function = DualLoss(
@@ -118,6 +117,20 @@ def main():
     print("Train batches:", len(train_dataloader))
     print("Val samples:", len(val_dataloader.dataset))
     print("Val batches:", len(val_dataloader))
+
+    # ========== PASTE THIS WHOLE BLOCK HERE ==========
+    images, targets = next(iter(train_dataloader))
+    images, targets = images.to(device), targets.to(device)
+    print(f"\nTargets shape: {targets.shape}")
+    print(f"Positive pixels per class: {targets.sum(dim=(0,2,3))}")
+    
+    with torch.no_grad():
+        logits = model(images)
+        probs = torch.sigmoid(logits)
+        print(f"Probs range: [{probs.min():.3f}, {probs.max():.3f}]")
+        print(f"Pixels > 0.5: {(probs > 0.5).sum()}")
+    # ========== END PASTE ==========
+
     # ================= Metric Storage =================
     train_losses = []
     val_losses = []
@@ -130,7 +143,36 @@ def main():
     val_f1s = []
     val_recalls = []
 
+    train_mean_f1s = []
+    val_mean_f1s = []
+    train_mean_ious = []
+    val_mean_ious = []
+    train_mean_recalls = []
+    val_mean_recalls = []
+
     best_val_f1 = -1.0
+
+    # ===== Open CSV files =====
+    CLASSES = ["EX", "HE", "MA", "SE"]
+
+    mean_csv_path = OUTPUT_DIR / f"{MODEL_NAME}_mean.csv"
+    mean_f = open(mean_csv_path, "w", newline = "")
+    mean_writer = csv.writer(mean_f)
+    mean_writer.writerow([
+        "epoch",
+        "train_loss", "val_loss",
+        "train_mean_iou", "val_mean_iou",
+        "train_mean_f1", "val_mean_f1",
+        "train_mean_recall", "val_mean_recall"
+    ])
+
+    class_csv_path = OUTPUT_DIR / f"{MODEL_NAME}_per_class.csv"
+    class_f = open(class_csv_path, "w", newline = "")
+    class_writer = csv.writer(class_f)
+    class_writer.writerow([
+        "epoch", "split", "class",
+        "iou", "f1", "recall"
+    ])
 
     # ================= Training Loop =================
     for epoch in range(DEFAULT_EPOCHS):
@@ -142,6 +184,7 @@ def main():
             optimizer = optimizer,
             criterion = loss_function,
             device = device,
+            thresholds = THRESHOLDS,
             n_classes = OUT_CHANNELS,
         )
 
@@ -150,10 +193,9 @@ def main():
             dataloader = val_dataloader,
             criterion = loss_function,
             device = device,
+            thresholds = THRESHOLDS,
             n_classes = OUT_CHANNELS,
         )
-
-        scheduler.step(val_loss)
 
         # ===== Store Metrics =====
         train_losses.append(train_loss)
@@ -169,7 +211,14 @@ def main():
         val_recalls.append(v_rec)
 
         # ===== Save Best Model (Done if Validation F1 > Best F1 so far) =====
-        mean_v_f1 = sum(v_f1) / len(v_f1)
+        mean_tr_iou = sum(tr_iou) / len(tr_iou) if len(tr_iou) > 0 else 0.0
+        mean_tr_f1  = sum(tr_f1) / len(tr_f1) if len(tr_f1) > 0 else 0.0
+        mean_tr_rec = sum(tr_rec) / len(tr_rec) if len(tr_rec) > 0 else 0.0
+
+        mean_v_iou = sum(v_iou) / len(v_iou) if len(v_iou) > 0 else 0.0
+        mean_v_f1  = sum(v_f1) / len(v_f1) if len(v_f1) > 0 else 0.0
+        mean_v_rec = sum(v_rec) / len(v_rec) if len(v_rec) > 0 else 0.0
+
         if mean_v_f1 > best_val_f1:
             best_val_f1 = mean_v_f1
             torch.save(
@@ -177,27 +226,39 @@ def main():
                 OUTPUT_DIR / "best_model.pt"
             )
             print(f"Saved new best model (mean val_f1 = {mean_v_f1:.4f})")
-    # ================= Save Metrics CSV =================
-    csv_path = OUTPUT_DIR / f"{MODEL_NAME}.csv"
-    with open(csv_path, mode = "w", newline = "") as f:
-        writer = csv.writer(f)
-        writer.writerow([
-            "epoch",
-            "train_loss", "val_loss",
-            "train_iou", "val_iou",
-            "train_f1", "val_f1",
-            "train_recall", "val_recall"
+
+        # ===== Store mean metrics =====
+        train_mean_f1s.append(float(np.nanmean(tr_f1)))
+        val_mean_f1s.append(mean_v_f1)
+
+        train_mean_ious.append(float(np.nanmean(tr_iou)))
+        val_mean_ious.append(mean_v_iou)
+
+        train_mean_recalls.append(float(np.nanmean(tr_rec)))
+        val_mean_recalls.append(mean_v_rec)
+
+        # ================= Save Metrics CSV =================
+        mean_writer.writerow([
+            epoch + 1,
+            train_loss, val_loss,
+            mean_tr_iou, mean_v_iou,
+            mean_tr_f1,  mean_v_f1,
+            mean_tr_rec, mean_v_rec
         ])
-
-        for epoch in range(DEFAULT_EPOCHS):
-            writer.writerow([
-                epoch + 1,
-                train_losses[epoch], val_losses[epoch],
-                train_ious[epoch],   val_ious[epoch],
-                train_f1s[epoch],    val_f1s[epoch],
-                train_recalls[epoch], val_recalls[epoch]
+        mean_f.flush()
+        for c, cls in enumerate(CLASSES):
+            class_writer.writerow([
+                epoch + 1, "train", cls,
+                tr_iou[c], tr_f1[c], tr_rec[c]
             ])
-
+            class_writer.writerow([
+                epoch + 1, "val", cls,
+                v_iou[c], v_f1[c], v_rec[c]
+            ])
+        class_f.flush()
+    
+    mean_f.close()
+    class_f.close()
     print(f"Training complete.")
 
 if __name__ == "__main__":

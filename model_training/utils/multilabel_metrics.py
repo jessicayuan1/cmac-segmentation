@@ -5,78 +5,74 @@ import torch
 # targets:     (N, 4, H, W) binary masks
 # Class order: ['EX', 'HE', 'MA', 'SE']
 
-
-def calculate_iou_per_class(predictions, targets, threshold = 0.5):
-    """
-    IoU per class for multilabel segmentation.
-    """
-    assert predictions.shape == targets.shape, "Predictions and targets must have same shape"
-    assert predictions.shape[1] == 4, "Expected 4 classes: ['EX', 'HE', 'MA', 'SE']"
-
-    preds = (torch.sigmoid(predictions) > threshold)
+def calculate_iou_per_class(predictions, targets, thresholds):
     targets = targets.bool()
+    probs = torch.sigmoid(predictions)
 
     ious = []
 
     for c in range(4):
-        pred_mask = preds[:, c]
-        target_mask = targets[:, c]
+        thresh = thresholds[c]
+        pred = (probs[:, c] > thresh)
+        gt = targets[:, c]
 
-        intersection = (pred_mask & target_mask).float().sum()
-        union = (pred_mask | target_mask).float().sum()
+        tp = (pred & gt).float().sum()
+        fp = (pred & ~gt).float().sum()
+        fn = (~pred & gt).float().sum()
 
-        iou = intersection / union if union > 0 else torch.tensor(0.0, device = predictions.device)
-        ious.append(iou.item())
+        denom = tp + fp + fn
+
+        if denom == 0:
+            ious.append(None)
+        else:
+            ious.append((tp / denom).item())
 
     return ious
 
-
-def calculate_f1_per_class(predictions, targets, threshold = 0.5):
-    """
-    F1 / Dice per class.
-    """
-    assert predictions.shape == targets.shape, "Predictions and targets must have same shape"
-    assert predictions.shape[1] == 4, "Expected 4 classes: ['EX', 'HE', 'MA', 'SE']"
-
-    preds = (torch.sigmoid(predictions) > threshold)
+def calculate_f1_per_class(predictions, targets, thresholds):
     targets = targets.bool()
+    probs = torch.sigmoid(predictions)
 
     f1s = []
 
     for c in range(4):
-        pred_mask = preds[:, c]
-        target_mask = targets[:, c]
+        thresh = thresholds[c]
+        pred = (probs[:, c] > thresh)
+        gt = targets[:, c]
 
-        intersection = (pred_mask & target_mask).float().sum()
-        denom = pred_mask.float().sum() + target_mask.float().sum()
+        tp = (pred & gt).float().sum()
+        fp = (pred & ~gt).float().sum()
+        fn = (~pred & gt).float().sum()
 
-        f1 = 2 * intersection / denom if denom > 0 else torch.tensor(0.0, device = predictions.device)
-        f1s.append(f1.item())
+        denom = 2 * tp + fp + fn
+
+        if denom == 0:
+            f1s.append(None)
+        else:
+            f1s.append((2 * tp / denom).item())
 
     return f1s
 
-
-def calculate_recall_per_class(predictions, targets, threshold = 0.5):
-    """
-    Recall per class.
-    """
-    assert predictions.shape == targets.shape, "Predictions and targets must have same shape"
-    assert predictions.shape[1] == 4, "Expected 4 classes: ['EX', 'HE', 'MA', 'SE']"
-
-    preds = (torch.sigmoid(predictions) > threshold)
+def calculate_recall_per_class(predictions, targets, thresholds):
     targets = targets.bool()
+    probs = torch.sigmoid(predictions)
 
     recalls = []
 
     for c in range(4):
-        pred_mask = preds[:, c]
-        target_mask = targets[:, c]
+        thresh = thresholds[c]
+        pred = (probs[:, c] > thresh)
+        gt = targets[:, c]
 
-        intersection = (pred_mask & target_mask).float().sum()
-        target_sum = target_mask.float().sum()
+        tp = (pred & gt).float().sum()
+        fn = (~pred & gt).float().sum()
 
-        recall = intersection / target_sum if target_sum > 0 else torch.tensor(0.0, device = predictions.device)
-        recalls.append(recall.item())
+        denom = tp + fn
+
+        if denom == 0:
+            recalls.append(None)
+        else:
+            recalls.append((tp / denom).item())
 
     return recalls
 
