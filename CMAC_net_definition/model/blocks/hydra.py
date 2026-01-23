@@ -15,6 +15,9 @@ class HydraSegHead(nn.Module):
             for _ in range(num_classes)
         ])
 
+        for head in self.heads:
+            nn.init.constant_(head[-1].bias, -2.0)
+
     def forward(self, x):
         logits = [head(x) for head in self.heads]
         return torch.cat(logits, dim = 1)
