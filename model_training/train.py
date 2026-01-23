@@ -27,13 +27,13 @@ from model_training.data_loader import get_fundus_dataloaders
 from model_training.loss_functions import (
     FocalTverskyLoss,
     DualLoss,
-    BCEwithLogitsLossMultiLabel,
+    BCELossMultiLabel,
 )
 from model_training.training_loop import train_one_epoch
 from model_training.valid_loop import valid_one_epoch
 
 # =============== Global Constants =================
-MODEL_NAME = "test"
+MODEL_NAME = "test1"
 
 IMG_SIZE = 512
 DEFAULT_EPOCHS = 20
