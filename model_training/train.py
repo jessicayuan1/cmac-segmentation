@@ -37,18 +37,18 @@ MODEL_NAME = "test1"
 
 IMG_SIZE = 512
 DEFAULT_EPOCHS = 20
-LEARNING_RATE = 0.008
-DEFAULT_SEED = 73
+LEARNING_RATE = 1e-6
+DEFAULT_SEED = 42
 
 BATCH_SIZE = 8
 NUM_WORKERS = 6
 
-W_FTL = 0.6
-W_BCE = 0.4
+W_FTL = 0.8
+W_BCE = 0.2
 
 TVERSKY_ALPHA = 0.4
 TVERSKY_BETA = 0.6
-TVERSKY_GAMMA = 1.13
+TVERSKY_GAMMA = 1.5
 SMOOTH = 1e-6
 
 CLAHE_CLIP = 2.5
@@ -77,19 +77,17 @@ def main():
     model = CMACNet(
         in_channels = IN_CHANNELS,
         out_channels = OUT_CHANNELS,
-        base_channels = 32,
+        base_channels = 16,
         depths = [1, 2, 3, 6],
         img_size = IMG_SIZE
     ).to(device = device)
     
     # ============ Optimizer =============
-    optimizer = torch.optim.SGD(
-        params = model.parameters(), 
+    optimizer = torch.optim.AdamW(
+        params = model.parameters(),
         lr = LEARNING_RATE,
-        momentum = 0.9,
-        weight_decay = 1e-4,
-        nesterov = False
-        )
+        weight_decay = 1e-4
+    )
 
     # ============== Loss =================
     loss_function = DualLoss(

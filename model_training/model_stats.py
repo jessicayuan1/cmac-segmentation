@@ -33,7 +33,7 @@ if __name__ == "__main__":
     model = CMACNet(
         in_channels = 3,
         out_channels = 4,
-        base_channels = 32,
+        base_channels = 16,
         depths = [1, 2, 3, 6],
         img_size = 512,
         drop_path_rate = 0.15

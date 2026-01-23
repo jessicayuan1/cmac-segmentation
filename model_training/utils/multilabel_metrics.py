@@ -1,10 +1,5 @@
 import torch
 
-# Multilabel segmentation metrics
-# predictions: (N, 4, H, W) raw logits
-# targets:     (N, 4, H, W) binary masks
-# Class order: ['EX', 'HE', 'MA', 'SE']
-
 def calculate_iou_per_class(predictions, targets, thresholds):
     """
     Args:
