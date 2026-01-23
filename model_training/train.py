@@ -65,6 +65,7 @@ OUTPUT_DIR = Path("runs") / Path(MODEL_NAME)
 # =============== Main ================
 def main():
     torch.manual_seed(DEFAULT_SEED)
+    torch.cuda.manual_seed_all(DEFAULT_SEED)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     OUTPUT_DIR.mkdir(parents = True, exist_ok = True)
@@ -128,11 +129,16 @@ def main():
     print("Unique target values:", torch.unique(targets))
 
     with torch.no_grad():
-        logits = model(images)
-        probs = torch.sigmoid(logits)
+        probs = model(images)
+
+        assert probs.min() >= 0.0 and probs.max() <= 1.0, \
+            "Model output must be probabilities in [0, 1]"
+
         print(f"Train probs range: [{probs.min():.3f}, {probs.max():.3f}]")
-        print("Train max prob per class:",
-            probs.max(dim = 0).values.max(dim = 1).values)
+        print(
+            "Train max prob per class:",
+            probs.max(dim = 0).values.max(dim = 1).values
+        )
         print("Train pixels > 0.5:", (probs > 0.5).sum())
 
     images_v, targets_v = next(iter(val_dataloader))
@@ -144,11 +150,16 @@ def main():
     print("Unique target values:", torch.unique(targets_v))
 
     with torch.no_grad():
-        logits_v = model(images_v)
-        probs_v = torch.sigmoid(logits_v)
+        probs_v = model(images_v)
+
+        assert probs_v.min() >= 0.0 and probs_v.max() <= 1.0, \
+            "Model output must be probabilities in [0, 1]"
+
         print(f"Val probs range: [{probs_v.min():.3f}, {probs_v.max():.3f}]")
-        print("Val max prob per class:",
-            probs_v.max(dim = 0).values.max(dim = 1).values)
+        print(
+            "Val max prob per class:",
+            probs_v.max(dim = 0).values.max(dim = 1).values
+        )
         print("Val pixels > 0.5:", (probs_v > 0.5).sum())
 
     # ================= Metric Storage =================
@@ -198,7 +209,7 @@ def main():
     for epoch in range(DEFAULT_EPOCHS):
         print(f"\nEpoch [{epoch + 1}/{DEFAULT_EPOCHS}]")
 
-        train_loss, tr_iou, tr_f1, tr_rec, tr_mean_ious, tr_mean_f1, tr_mean_rec = train_one_epoch(
+        train_loss, tr_iou, tr_f1, tr_rec, tr_mean_iou, tr_mean_f1, tr_mean_rec = train_one_epoch(
             model = model,
             dataloader = train_dataloader,
             optimizer = optimizer,
@@ -243,7 +254,7 @@ def main():
         train_mean_f1s.append(tr_mean_f1)
         val_mean_f1s.append(v_mean_f1)
 
-        train_mean_ious.append(tr_mean_ious)
+        train_mean_ious.append(tr_mean_iou)
         val_mean_ious.append(v_mean_iou)
 
         train_mean_recalls.append(tr_mean_rec)
@@ -253,7 +264,7 @@ def main():
         mean_writer.writerow([
             epoch + 1,
             train_loss, val_loss,
-            tr_mean_ious, v_mean_iou,
+            tr_mean_iou, v_mean_iou,
             tr_mean_f1,   v_mean_f1,
             tr_mean_rec,  v_mean_rec
         ])

@@ -191,11 +191,16 @@ class FundusSegmentationDataset(Dataset):
 
             r, g, b = ann[..., 0], ann[..., 1], ann[..., 2]
 
+            def near(val, target, tol = 10):
+                return np.abs(val - target) <= tol
+            
+            tol = 10
+
             masks = [
-                ((r == 128)   & (g == 0)   & (b == 0)).astype(np.uint8),  # EX (red)
-                ((r == 0)   & (g == 128) & (b == 128)).astype(np.uint8),  # HE (green)
-                ((r == 128) & (g == 128) & (b == 0)).astype(np.uint8),    # MA (yellow)
-                ((r == 0) & (g == 0)   & (b == 128)).astype(np.uint8),    # SE (blue)
+                (near(r, 128, tol) & near(g, 0, tol)   & near(b, 0, tol)).astype(np.uint8),     # EX
+                (near(r, 0, tol)   & near(g, 128, tol) & near(b, 128, tol)).astype(np.uint8),   # HE
+                (near(r, 128, tol) & near(g, 128, tol) & near(b, 0, tol)).astype(np.uint8),     # MA
+                (near(r, 0, tol)   & near(g, 0, tol)   & near(b, 128, tol)).astype(np.uint8),   # SE
             ]
         else:
             # ---- DDR / IDRiD: per-class binary masks ----

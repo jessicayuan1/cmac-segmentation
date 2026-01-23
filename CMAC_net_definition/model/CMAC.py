@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from .blocks import (
     ConvBNReLU, HaarWaveletDownsampling, DepthwiseSeparable,
     PolarizedSelfAttention, MAC, MLDA, MMAC,
-    ResizeOp, CPCFModule
+    ResizeOp, CPCFModule, HydraSegHead
 )
 
 class CMACNet(nn.Module):
@@ -23,11 +23,13 @@ class CMACNet(nn.Module):
         depths = [1, 2, 3, 6],  # [stage1, stage2, stage3, stage4]
         img_size = 512,
         drop_path_rate = 0.15,
+        apply_sigmoid = True
     ):
         super().__init__()
 
         C = base_channels
         self.img_size = img_size
+        self.apply_sigmoid = apply_sigmoid
 
         # -------------------------
         # Linear DropPath schedule
@@ -169,7 +171,10 @@ class CMACNet(nn.Module):
             mode = 'bilinear', 
             align_corners = False
         )
-        self.seg_head = nn.Conv2d(C, out_channels, 1)
+        self.seg_head = HydraSegHead(
+            in_ch = C,
+            num_classes = out_channels
+        )
 
     def forward(self, x):
         """
@@ -207,5 +212,8 @@ class CMACNet(nn.Module):
         # Segmentation head - upsample to original resolution
         out = self.final_upsample(de1)  # (B, C, H, W)
         out = self.seg_head(out)        # (B, out_channels, H, W)
-        
+
+        if self.apply_sigmoid:
+            out = torch.sigmoid(out)
+
         return out

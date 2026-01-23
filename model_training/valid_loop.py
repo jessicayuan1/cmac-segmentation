@@ -6,8 +6,14 @@ from model_training.utils.multilabel_metrics import (
     calculate_recall_per_class,
 )
 
-# Validate for one epoch
-def valid_one_epoch(model, dataloader, criterion, device, thresholds, n_classes = 4):
+def valid_one_epoch(
+    model,
+    dataloader,
+    criterion,
+    device,
+    thresholds,
+    n_classes = 4,
+):
     model.eval()
     val_loss = 0.0
     total_samples = 0
@@ -17,12 +23,21 @@ def valid_one_epoch(model, dataloader, criterion, device, thresholds, n_classes 
 
     with torch.no_grad():
         for imgs, masks in dataloader:
-            imgs, masks = imgs.to(device), masks.to(device)
+            imgs = imgs.to(device)
+            masks = masks.to(device)
 
             batch_size = imgs.size(0)
             total_samples += batch_size
 
-            outputs = model(imgs)
+            # -------------------------
+            # Forward: model returns PROBABILITIES
+            # -------------------------
+            outputs = model(imgs)  # (B, C, H, W), probs in [0, 1]
+
+            # Safety check (debug-stage)
+            assert outputs.min() >= 0.0 and outputs.max() <= 1.0, \
+                "Model outputs must be probabilities in [0, 1]"
+
             loss = criterion(outputs, masks)
 
             val_loss += loss.item() * batch_size
@@ -30,16 +45,25 @@ def valid_one_epoch(model, dataloader, criterion, device, thresholds, n_classes 
             all_outputs.append(outputs.cpu())
             all_targets.append(masks.cpu())
 
-    # Combine predictions and targets across all batches
+    # -------------------------
+    # Dataset-level aggregation
+    # -------------------------
     preds = torch.cat(all_outputs, dim = 0)
     targets = torch.cat(all_targets, dim = 0)
 
-    # Compute dataset-level loss
     epoch_loss = val_loss / total_samples
 
-    # Compute metrics over the full validation set
+    # Metrics expect probabilities + thresholds
     ious, mean_iou = calculate_iou_per_class(preds, targets, thresholds)
     f1s, mean_f1 = calculate_f1_per_class(preds, targets, thresholds)
     recalls, mean_recall = calculate_recall_per_class(preds, targets, thresholds)
 
-    return epoch_loss, ious, f1s, recalls, mean_iou, mean_f1, mean_recall
+    return (
+        epoch_loss,
+        ious,
+        f1s,
+        recalls,
+        mean_iou,
+        mean_f1,
+        mean_recall,
+    )
