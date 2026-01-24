@@ -23,6 +23,7 @@ import numpy as np
 
 # Local Imports
 from CMAC_net_definition.model.CMAC import CMACNet
+from HydraLANet_Definition.model.hydralanet import HydraLANet
 from model_training.data_loader import get_fundus_dataloaders
 from model_training.loss_functions import (
     FocalTverskyLoss,
@@ -46,16 +47,17 @@ NUM_WORKERS = 6
 W_FTL = 0.8
 W_BCE = 0.2
 
-TVERSKY_ALPHA = 0.4
-TVERSKY_BETA = 0.6
+TVERSKY_ALPHA = 0.5
+TVERSKY_BETA = 0.5
 TVERSKY_GAMMA = 2
 SMOOTH = 1e-6
 
+CLAHE_ON = False
 CLAHE_CLIP = 1.5
 CLAHE_MODE = 'green'
 
 CLASS_WEIGHTS = [1.0, 1.0, 1.0, 1.0]
-THRESHOLDS = [0.4, 0.4, 0.4, 0.4]
+THRESHOLDS = [0.35, 0.35, 0.35, 0.35]
 
 OUT_CHANNELS = 4
 IN_CHANNELS = 3
@@ -74,13 +76,7 @@ def main():
     print("Device:", torch.cuda.get_device_name(0))
 
     # ============== Model ===============
-    model = CMACNet(
-        in_channels = IN_CHANNELS,
-        out_channels = OUT_CHANNELS,
-        base_channels = 16,
-        depths = [1, 2, 3, 6],
-        img_size = IMG_SIZE
-    ).to(device = device)
+    model = HydraLANet()
     
     # ============ Optimizer =============
     optimizer = torch.optim.AdamW(
@@ -105,7 +101,7 @@ def main():
         resolution = IMG_SIZE,
         batch_size = BATCH_SIZE,
         data_csv_dir = "data_csv",
-        use_clahe = True,
+        use_clahe = CLAHE_ON,
         clahe_clip = CLAHE_CLIP,
         clahe_tile = (8, 8),
         clahe_mode = CLAHE_MODE,
