@@ -8,9 +8,9 @@ def main():
     model = SwinUNet(
         img_size = 512,
         in_channels = 3,
-        out_channels = 5,
+        out_channels = 4,
         embed_dim = 96,
-        depths = [2, 2, 6, 2],
+        depths = [1, 2, 3, 4],
         num_heads = [3, 6, 12, 24],
         window_size = 8
     )
