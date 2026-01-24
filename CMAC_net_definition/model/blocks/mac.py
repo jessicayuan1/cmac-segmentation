@@ -1,23 +1,6 @@
 import torch
 import torch.nn as nn
-from .attention import PolarizedSelfAttention
-
-
-class DropPath(nn.Module):
-    """Stochastic Depth (Drop Path) for regularization"""
-    def __init__(self, drop_prob=0.):
-        super().__init__()
-        self.drop_prob = drop_prob
-
-    def forward(self, x):
-        if self.drop_prob == 0. or not self.training:
-            return x
-        keep_prob = 1 - self.drop_prob
-        shape = (x.shape[0],) + (1,) * (x.ndim - 1)
-        random_tensor = keep_prob + torch.rand(shape, device=x.device)
-        binary_mask = random_tensor.floor()
-        return x / keep_prob * binary_mask
-
+from .attention import PolarizedSelfAttention, DropPath
 
 class MAC(nn.Module):
     """
@@ -32,11 +15,9 @@ class MAC(nn.Module):
         expansion: Channel expansion ratio (use 1 for lightweight, matching MobileNetV2-style)
         drop_path: DropPath probability
     """
-    def __init__(self, n_channels, out_ch, expansion=1, drop_path=0.0):
+    def __init__(self, n_channels, out_ch, expansion=4, drop_path=0.0):
         super().__init__()
         
-        # CRITICAL FIX: Use expansion=1 to match lightweight design
-        # MobileNet typically uses 1-2, NOT 4!
         hidden_dim = n_channels * expansion
 
         # 1×1 expand
@@ -75,8 +56,9 @@ class MAC(nn.Module):
         x = self.bn3(self.project(x))
 
         # DropPath + Residual
-        x = self.drop_path(x)
         if self.use_residual:
-            x = x + identity
+            # ONLY drop path if we have an identity shortcut to fall back on
+            x = identity + self.drop_path(x)
+            x = self.act(x)
 
         return x

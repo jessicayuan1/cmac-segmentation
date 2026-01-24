@@ -23,39 +23,41 @@ import numpy as np
 
 # Local Imports
 from CMAC_net_definition.model.CMAC import CMACNet
+from HydraLANet_Definition.model.hydralanet import HydraLANet
 from model_training.data_loader import get_fundus_dataloaders
 from model_training.loss_functions import (
     FocalTverskyLoss,
     DualLoss,
-    BCEwithLogitsLossMultiLabel,
+    BCELossMultiLabel,
 )
 from model_training.training_loop import train_one_epoch
 from model_training.valid_loop import valid_one_epoch
 
 # =============== Global Constants =================
-MODEL_NAME = "test"
+MODEL_NAME = "test1"
 
 IMG_SIZE = 512
-DEFAULT_EPOCHS = 20
-LEARNING_RATE = 0.008
-DEFAULT_SEED = 73
+DEFAULT_EPOCHS = 75
+LEARNING_RATE = 1e-5
+DEFAULT_SEED = 42
 
 BATCH_SIZE = 8
 NUM_WORKERS = 6
 
-W_FTL = 0.6
-W_BCE = 0.4
+W_FTL = 0.8
+W_BCE = 0.2
 
-TVERSKY_ALPHA = 0.4
-TVERSKY_BETA = 0.6
-TVERSKY_GAMMA = 1.13
+TVERSKY_ALPHA = 0.5
+TVERSKY_BETA = 0.5
+TVERSKY_GAMMA = 2
 SMOOTH = 1e-6
 
-CLAHE_CLIP = 2.5
+CLAHE_ON = False
+CLAHE_CLIP = 1.5
 CLAHE_MODE = 'green'
 
 CLASS_WEIGHTS = [1.0, 1.0, 1.0, 1.0]
-THRESHOLDS = [0.3, 0.3, 0.3, 0.3]
+THRESHOLDS = [0.35, 0.35, 0.35, 0.35]
 
 OUT_CHANNELS = 4
 IN_CHANNELS = 3
@@ -65,6 +67,7 @@ OUTPUT_DIR = Path("runs") / Path(MODEL_NAME)
 # =============== Main ================
 def main():
     torch.manual_seed(DEFAULT_SEED)
+    torch.cuda.manual_seed_all(DEFAULT_SEED)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     OUTPUT_DIR.mkdir(parents = True, exist_ok = True)
@@ -73,22 +76,21 @@ def main():
     print("Device:", torch.cuda.get_device_name(0))
 
     # ============== Model ===============
-    model = CMACNet(
-        in_channels = IN_CHANNELS,
-        out_channels = OUT_CHANNELS,
-        base_channels = 32,
-        depths = [1, 2, 3, 6],
-        img_size = IMG_SIZE
-    ).to(device = device)
+    model = HydraLANet()
+    model = model.to(device)
+    # ===== Freeze BatchNorm running stats (Due to low batch size) =====
+    def freeze_bn(module):
+        if isinstance(module, torch.nn.BatchNorm2d):
+            module.eval()
+
+    model.apply(freeze_bn)
     
     # ============ Optimizer =============
-    optimizer = torch.optim.SGD(
-        params = model.parameters(), 
+    optimizer = torch.optim.AdamW(
+        params = model.parameters(),
         lr = LEARNING_RATE,
-        momentum = 0.9,
-        weight_decay = 1e-4,
-        nesterov = False
-        )
+        weight_decay = 1e-4
+    )
 
     # ============== Loss =================
     loss_function = DualLoss(
@@ -106,7 +108,7 @@ def main():
         resolution = IMG_SIZE,
         batch_size = BATCH_SIZE,
         data_csv_dir = "data_csv",
-        use_clahe = True,
+        use_clahe = CLAHE_ON,
         clahe_clip = CLAHE_CLIP,
         clahe_tile = (8, 8),
         clahe_mode = CLAHE_MODE,
@@ -128,11 +130,16 @@ def main():
     print("Unique target values:", torch.unique(targets))
 
     with torch.no_grad():
-        logits = model(images)
-        probs = torch.sigmoid(logits)
+        probs = model(images)
+
+        assert probs.min() >= 0.0 and probs.max() <= 1.0, \
+            "Model output must be probabilities in [0, 1]"
+
         print(f"Train probs range: [{probs.min():.3f}, {probs.max():.3f}]")
-        print("Train max prob per class:",
-            probs.max(dim = 0).values.max(dim = 1).values)
+        print(
+            "Train max prob per class:",
+            probs.max(dim = 0).values.max(dim = 1).values
+        )
         print("Train pixels > 0.5:", (probs > 0.5).sum())
 
     images_v, targets_v = next(iter(val_dataloader))
@@ -144,11 +151,16 @@ def main():
     print("Unique target values:", torch.unique(targets_v))
 
     with torch.no_grad():
-        logits_v = model(images_v)
-        probs_v = torch.sigmoid(logits_v)
+        probs_v = model(images_v)
+
+        assert probs_v.min() >= 0.0 and probs_v.max() <= 1.0, \
+            "Model output must be probabilities in [0, 1]"
+
         print(f"Val probs range: [{probs_v.min():.3f}, {probs_v.max():.3f}]")
-        print("Val max prob per class:",
-            probs_v.max(dim = 0).values.max(dim = 1).values)
+        print(
+            "Val max prob per class:",
+            probs_v.max(dim = 0).values.max(dim = 1).values
+        )
         print("Val pixels > 0.5:", (probs_v > 0.5).sum())
 
     # ================= Metric Storage =================
@@ -197,8 +209,11 @@ def main():
     # ================= Training Loop =================
     for epoch in range(DEFAULT_EPOCHS):
         print(f"\nEpoch [{epoch + 1}/{DEFAULT_EPOCHS}]")
+        
+        model.train()
+        model.apply(freeze_bn)
 
-        train_loss, tr_iou, tr_f1, tr_rec, tr_mean_ious, tr_mean_f1, tr_mean_rec = train_one_epoch(
+        train_loss, tr_iou, tr_f1, tr_rec, tr_mean_iou, tr_mean_f1, tr_mean_rec = train_one_epoch(
             model = model,
             dataloader = train_dataloader,
             optimizer = optimizer,
@@ -243,7 +258,7 @@ def main():
         train_mean_f1s.append(tr_mean_f1)
         val_mean_f1s.append(v_mean_f1)
 
-        train_mean_ious.append(tr_mean_ious)
+        train_mean_ious.append(tr_mean_iou)
         val_mean_ious.append(v_mean_iou)
 
         train_mean_recalls.append(tr_mean_rec)
@@ -253,7 +268,7 @@ def main():
         mean_writer.writerow([
             epoch + 1,
             train_loss, val_loss,
-            tr_mean_ious, v_mean_iou,
+            tr_mean_iou, v_mean_iou,
             tr_mean_f1,   v_mean_f1,
             tr_mean_rec,  v_mean_rec
         ])

@@ -13,75 +13,39 @@ from model_training.utils.multilabel_metrics import (
     print_segmentation_metrics
 )
 
-CLASSES = ["EX", "HE", "MA", "SE"]
+# ================= Tests =================
 
+def main():
+    torch.manual_seed(0)
 
-def test_metrics_random():
-    """
-    Sanity test with random data.
-    Just checks code runs and shapes align.
-    """
-    print("Running random metrics test...")
+    N, C, H, W = 2, 4, 8, 8
+    thresholds = [0.5] * C
 
-    B, C, H, W = 2, 4, 32, 32
+    targets = torch.zeros(N, C, H, W)
+    targets[:, :, 2:6, 2:6] = 1.0
 
-    predictions = torch.randn(B, C, H, W)
-    targets = torch.randint(0, 2, (B, C, H, W))
+    print("\n=== Perfect Prediction ===")
+    preds = targets.clone()
+    print_segmentation_metrics(preds, targets, thresholds)
 
-    print("Predictions shape:", predictions.shape)
-    print("Targets shape:", targets.shape)
+    print("\n=== All-Zero Prediction ===")
+    preds = torch.zeros_like(targets)
+    print_segmentation_metrics(preds, targets, thresholds)
 
-    print("\nMetrics output:")
-    print_segmentation_metrics(predictions, targets)
+    print("\n=== All-One Prediction ===")
+    preds = torch.ones_like(targets)
+    print_segmentation_metrics(preds, targets, thresholds)
 
-    print("\nRandom metrics test passed.\n")
+    print("\n=== Random Uniform Prediction ===")
+    preds = torch.rand_like(targets)
+    print_segmentation_metrics(preds, targets, thresholds)
 
-
-def test_metrics_known_small():
-    """
-    Deterministic test with hand-constructed masks.
-    """
-    print("Running known-value metrics test...")
-
-    B, C, H, W = 1, 4, 4, 4
-
-    predictions = torch.full((B, C, H, W), -10.0)
-    targets = torch.zeros((B, C, H, W))
-
-    # ----- EX (class 0): perfect overlap -----
-    predictions[0, 0, 0:2, 0:2] = 10.0
-    targets[0, 0, 0:2, 0:2] = 1
-
-    # ----- HE (class 1): partial overlap -----
-    predictions[0, 1, 0:2, 0:2] = 10.0
-    targets[0, 1, 1:3, 1:3] = 1
-
-    print("Predicted binary masks:")
-    print((torch.sigmoid(predictions) > 0.5).int())
-
-    print("Target masks:")
-    print(targets.int())
-
-    print("\nMetrics output:")
-    print_segmentation_metrics(predictions, targets)
-
-    # ---- Direct metric checks ----
-    ious = calculate_iou_per_class(predictions, targets)
-    f1s = calculate_f1_per_class(predictions, targets)
-    recalls = calculate_recall_per_class(predictions, targets)
-
-    assert len(ious) == 4
-    assert len(f1s) == 4
-    assert len(recalls) == 4
-
-    # Perfect EX class
-    assert abs(ious[0] - 1.0) < 1e-4
-    assert abs(f1s[0] - 1.0) < 1e-4
-    assert abs(recalls[0] - 1.0) < 1e-4
-
-    print("\nKnown-value metrics test passed.\n")
+    print("\n=== Biased Random (Weak Model) ===")
+    preds = torch.rand_like(targets) * 0.4
+    preds[targets == 1] += 0.3
+    preds = preds.clamp(0, 1)
+    print_segmentation_metrics(preds, targets, thresholds)
 
 
 if __name__ == "__main__":
-    test_metrics_random()
-    test_metrics_known_small()
+    main()

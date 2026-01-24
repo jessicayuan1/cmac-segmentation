@@ -1,17 +1,13 @@
 import torch
-from CMAC_net_definition.model.CMAC import CMACNet
+from HydraLANet_Definition.model.hydralanet import HydraLANet
 
 def main():
     # Dummy RGB input
-    x = torch.randn(4, 3, 512, 512)
+    x = torch.randn(4, 3, 1024, 1024)
 
     # Initialize Model
-    model = CMACNet(
-        in_channels = 3,
-        out_channels = 4,
-        base_channels = 32,
-        img_size = 512,
-        depths = [1, 2, 3, 6],
+    model = HydraLANet(
+        n_channels = 3
     )
 
     model.eval()

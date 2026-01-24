@@ -9,6 +9,7 @@ class ChannelPSA(nn.Module):
         self.wv = nn.Conv2d(channels, mid, 1)
         self.wz = nn.Conv2d(mid, channels, 1)
         self.softmax = nn.Softmax(dim = 2)      # over HW
+        self.ln = nn.LayerNorm(channels)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
@@ -27,8 +28,17 @@ class ChannelPSA(nn.Module):
         z = torch.matmul(v, q.transpose(1, 2))  # (B, C/2, 1)
         z = z.view(b, -1, 1, 1)
 
+        # Projection C/2 -> C
+        z = self.wz(z)
+        
+        # FIX 1: Apply LayerNorm
+        # LayerNorm expects (B, ..., C), so we permute
+        z = z.permute(0, 2, 3, 1) # (B, 1, 1, C)
+        z = self.ln(z)
+        z = z.permute(0, 3, 1, 2) # (B, C, 1, 1)
+
         # Restore channels
-        z = self.sigmoid(self.wz(z))            # (B, C, 1, 1)
+        z = self.sigmoid(z)            # (B, C, 1, 1)
         return x * z
     
 class SpatialPSA(nn.Module):
@@ -70,3 +80,17 @@ class PolarizedSelfAttention(nn.Module):
         z_sp = self.spatial_psa(z_ch)
         return z_sp
     
+class DropPath(nn.Module):
+    """Stochastic Depth (Drop Path) for regularization"""
+    def __init__(self, drop_prob=0.):
+        super().__init__()
+        self.drop_prob = drop_prob
+
+    def forward(self, x):
+        if self.drop_prob == 0. or not self.training:
+            return x
+        keep_prob = 1 - self.drop_prob
+        shape = (x.shape[0],) + (1,) * (x.ndim - 1)
+        random_tensor = keep_prob + torch.rand(shape, device=x.device)
+        binary_mask = random_tensor.floor()
+        return x / keep_prob * binary_mask

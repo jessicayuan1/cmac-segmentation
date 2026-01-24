@@ -14,7 +14,7 @@ class ResizeOp(nn.Module):
     def __init__(self, in_channels, out_channels, mode='up'):
         super().__init__()
         self.mode = mode
-        self.conv = nn.Conv2d(in_channels, out_channels, 1, bias=False)
+        self.conv = nn.Conv2d(in_channels, out_channels, 1, bias=True)
         
     def forward(self, x):
         x = self.conv(x)

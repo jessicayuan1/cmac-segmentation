@@ -1,31 +1,31 @@
 import torch
 
-# Multilabel segmentation metrics
-# predictions: (N, 4, H, W) raw logits
-# targets:     (N, 4, H, W) binary masks
-# Class order: ['EX', 'HE', 'MA', 'SE']
-
 def calculate_iou_per_class(predictions, targets, thresholds):
     """
     Args:
-        predictions: (N, 4, H, W) raw logits
-        targets:     (N, 4, H, W) binary masks
-        thresholds:  float or list of 4 floats
+        predictions: (N, C, H, W) prediction probabilities in [0, 1]
+        targets:     (N, C, H, W) binary masks {0,1}
+        thresholds:  float or list/tuple of C floats
 
     Returns:
-        class_ious: list of 4 floats (or None if undefined)
-        mean_iou: average IoU across all valid pixels and classes
+        class_ious: list of C floats (or None if undefined)
+        mean_iou: scalar mean IoU over valid classes (or None)
     """
+    # -------- Assertions (hard safety) --------
+    assert predictions.min() >= 0.0 and predictions.max() <= 1.0, \
+        "Predictions must be probabilities in [0, 1]"
+    
     targets = targets.bool()
-    probs = torch.sigmoid(predictions)
+    probs = predictions  # already probabilities
 
-    C = predictions.shape[1]
+    C = probs.shape[1]
     class_ious = []
-    all_ious = []
+    valid_ious = []
 
     for c in range(C):
         thresh = thresholds[c] if isinstance(thresholds, (list, tuple)) else thresholds
-        pred = (probs[:, c] > thresh)
+
+        pred = probs[:, c] > thresh
         gt = targets[:, c]
 
         tp = (pred & gt).float().sum()
@@ -37,35 +37,43 @@ def calculate_iou_per_class(predictions, targets, thresholds):
         if denom > 0:
             iou = tp / denom
             class_ious.append(iou.item())
-            all_ious.append(iou)
+            valid_ious.append(iou)
         else:
             class_ious.append(None)
 
-    if all_ious:
-        mean_iou = torch.stack(all_ious).mean().item()
-    else:
-        mean_iou = None
+    mean_iou = torch.stack(valid_ious).mean().item() if valid_ious else None
 
     return class_ious, mean_iou
+
 
 def calculate_f1_per_class(predictions, targets, thresholds):
     """
     Computes per-class and mean F1 (Dice) score over the entire dataset.
 
-    Returns:
-        class_f1s: list of 4 floats or None
-        mean_f1: scalar mean F1 over valid classes
-    """
-    targets = targets.bool()
-    probs = torch.sigmoid(predictions)
+    Args:
+        predictions: (N, C, H, W) prediction probabilities in [0, 1]
+        targets:     (N, C, H, W) binary masks {0,1}
+        thresholds:  float or list/tuple of C floats
 
-    C = predictions.shape[1]
+    Returns:
+        class_f1s: list of C floats (or None if undefined)
+        mean_f1: scalar mean F1 over valid classes (or None)
+    """
+    # -------- Assertions --------
+    assert predictions.min() >= 0.0 and predictions.max() <= 1.0, \
+        "Predictions must be probabilities in [0, 1]"
+
+    targets = targets.bool()
+    probs = predictions
+
+    C = probs.shape[1]
     class_f1s = []
     valid_f1s = []
 
     for c in range(C):
         thresh = thresholds[c] if isinstance(thresholds, (list, tuple)) else thresholds
-        pred = (probs[:, c] > thresh)
+
+        pred = probs[:, c] > thresh
         gt = targets[:, c]
 
         tp = (pred & gt).float().sum()
@@ -88,20 +96,30 @@ def calculate_recall_per_class(predictions, targets, thresholds):
     """
     Computes per-class and mean Recall over the entire dataset.
 
-    Returns:
-        class_recalls: list of 4 floats or None
-        mean_recall: scalar mean Recall over valid classes
-    """
-    targets = targets.bool()
-    probs = torch.sigmoid(predictions)
+    Args:
+        predictions: (N, C, H, W) prediction probabilities in [0, 1]
+        targets:     (N, C, H, W) binary masks {0,1}
+        thresholds:  float or list/tuple of C floats
 
-    C = predictions.shape[1]
+    Returns:
+        class_recalls: list of C floats (or None if undefined)
+        mean_recall: scalar mean Recall over valid classes (or None)
+    """
+    # -------- Assertions --------
+    assert predictions.min() >= 0.0 and predictions.max() <= 1.0, \
+        "Predictions must be probabilities in [0, 1]"
+
+    targets = targets.bool()
+    probs = predictions
+
+    C = probs.shape[1]
     class_recalls = []
     valid_recalls = []
 
     for c in range(C):
         thresh = thresholds[c] if isinstance(thresholds, (list, tuple)) else thresholds
-        pred = (probs[:, c] > thresh)
+
+        pred = probs[:, c] > thresh
         gt = targets[:, c]
 
         tp = (pred & gt).float().sum()
@@ -119,41 +137,17 @@ def calculate_recall_per_class(predictions, targets, thresholds):
     mean_recall = torch.stack(valid_recalls).mean().item() if valid_recalls else None
     return class_recalls, mean_recall
 
-def print_segmentation_metrics(predictions, targets, thresholds=0.5):
+
+def print_segmentation_metrics(predictions, targets, thresholds = 0.5):
     """
-    Pretty-print IoU, F1, Recall per class with both class and overall averages.
+    Print only mean IoU, F1, and Recall.
+    Assumes predictions are probabilities in [0, 1].
     """
-    classes = ["EX", "HE", "MA", "SE"]
-    
-    ious, sample_ious = calculate_iou_per_class(predictions, targets, thresholds)
-    f1s, sample_f1s = calculate_f1_per_class(predictions, targets, thresholds)
-    recalls, sample_recalls = calculate_recall_per_class(predictions, targets, thresholds)
-    
-    # Overall mean (across all samples and classes)
-    mean_iou = sample_ious[~torch.isnan(sample_ious)].mean().item()
-    mean_f1 = sample_f1s[~torch.isnan(sample_f1s)].mean().item()
-    mean_recall = sample_recalls[~torch.isnan(sample_recalls)].mean().item()
-    
-    print("IoU per class:")
-    for name, v in zip(classes, ious):
-        if v is not None:
-            print(f"  {name}: {v:.4f}")
-        else:
-            print(f"  {name}: N/A")
-    print(f"  Mean: {mean_iou:.4f}")
-    
-    print("\nF1 (Dice) per class:")
-    for name, v in zip(classes, f1s):
-        if v is not None:
-            print(f"  {name}: {v:.4f}")
-        else:
-            print(f"  {name}: N/A")
-    print(f"  Mean: {mean_f1:.4f}")
-    
-    print("\nRecall per class:")
-    for name, v in zip(classes, recalls):
-        if v is not None:
-            print(f"  {name}: {v:.4f}")
-        else:
-            print(f"  {name}: N/A")
-    print(f"  Mean: {mean_recall:.4f}")
+    _, mean_iou = calculate_iou_per_class(predictions, targets, thresholds)
+    _, mean_f1 = calculate_f1_per_class(predictions, targets, thresholds)
+    _, mean_recall = calculate_recall_per_class(predictions, targets, thresholds)
+
+    print("Segmentation Metrics:")
+    print(f"  Mean IoU   : {mean_iou:.4f}" if mean_iou is not None else "  Mean IoU   : N/A")
+    print(f"  Mean F1    : {mean_f1:.4f}" if mean_f1 is not None else "  Mean F1    : N/A")
+    print(f"  Mean Recall: {mean_recall:.4f}" if mean_recall is not None else "  Mean Recall: N/A")
