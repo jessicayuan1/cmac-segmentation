@@ -77,6 +77,13 @@ def main():
 
     # ============== Model ===============
     model = HydraLANet()
+    model = model.to(device)
+    # ===== Freeze BatchNorm running stats (Due to low batch size) =====
+    def freeze_bn(module):
+        if isinstance(module, torch.nn.BatchNorm2d):
+            module.eval()
+
+    model.apply(freeze_bn)
     
     # ============ Optimizer =============
     optimizer = torch.optim.AdamW(
@@ -202,6 +209,9 @@ def main():
     # ================= Training Loop =================
     for epoch in range(DEFAULT_EPOCHS):
         print(f"\nEpoch [{epoch + 1}/{DEFAULT_EPOCHS}]")
+        
+        model.train()
+        model.apply(freeze_bn)
 
         train_loss, tr_iou, tr_f1, tr_rec, tr_mean_iou, tr_mean_f1, tr_mean_rec = train_one_epoch(
             model = model,
