@@ -12,13 +12,10 @@ def train_one_epoch(model, dataloader, optimizer, criterion, device, thresholds,
     model.train()
     running_loss = 0.0
     total_samples = 0
-    # Store metrics per class as lists to accumulate across batches
-    class_ious = [[] for _ in range(n_classes)]
-    class_f1s = [[] for _ in range(n_classes)]
-    class_recalls = [[] for _ in range(n_classes)]
 
-    #loop = tqdm(dataloader, desc = "Training", leave = False) Optional for viewing
-    #Replace dataloader with loop if using tqdm
+    all_outputs = []
+    all_targets = []
+
     for imgs, masks in dataloader:
         imgs = imgs.to(device)
         masks = masks.to(device)
@@ -35,39 +32,19 @@ def train_one_epoch(model, dataloader, optimizer, criterion, device, thresholds,
 
         running_loss += loss.item() * batch_size
 
-        # Calculate metrics per batch
-        with torch.no_grad():
-            batch_ious = calculate_iou_per_class(outputs, masks, thresholds)
-            batch_f1s = calculate_f1_per_class(outputs, masks, thresholds)
-            batch_recalls = calculate_recall_per_class(outputs, masks, thresholds)
+        all_outputs.append(outputs.detach().cpu())
+        all_targets.append(masks.detach().cpu())
 
-            for i in range(n_classes):
-                if batch_ious[i] is not None:
-                    class_ious[i].append(batch_ious[i])
+    # Concatenate all predictions and targets for full-dataset metrics
+    preds = torch.cat(all_outputs, dim = 0)
+    targets = torch.cat(all_targets, dim = 0)
 
-                if batch_f1s[i] is not None:
-                    class_f1s[i].append(batch_f1s[i])
-
-                if batch_recalls[i] is not None:
-                    class_recalls[i].append(batch_recalls[i])
-
-    # Aggregate losses and metrics
+    # Compute loss
     epoch_loss = running_loss / total_samples
-    
-    epoch_ious = [
-        sum(class_ious[i]) / len(class_ious[i]) if len(class_ious[i]) > 0 else 0.0
-        for i in range(n_classes)
-    ]
 
-    epoch_f1s = [
-        sum(class_f1s[i]) / len(class_f1s[i]) if len(class_f1s[i]) > 0 else 0.0
-        for i in range(n_classes)
-    ]
+    # Compute dataset-level metrics
+    ious, mean_iou = calculate_iou_per_class(preds, targets, thresholds)
+    f1s, mean_f1 = calculate_f1_per_class(preds, targets, thresholds)
+    recalls, mean_recall = calculate_recall_per_class(preds, targets, thresholds)
 
-    epoch_recalls = [
-        sum(class_recalls[i]) / len(class_recalls[i]) if len(class_recalls[i]) > 0 else 0.0
-        for i in range(n_classes)
-    ]
-
-    # Return metrics, loss for the epoch
-    return epoch_loss, epoch_ious, epoch_f1s, epoch_recalls
+    return epoch_loss, ious, f1s, recalls, mean_iou, mean_f1, mean_recall
