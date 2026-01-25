@@ -33,15 +33,15 @@ from model_training.training_loop import train_one_epoch
 from model_training.valid_loop import valid_one_epoch
 
 # =============== Global Constants =================
-MODEL_NAME = "test1"
+MODEL_NAME = "2A"
 
-IMG_SIZE = 512
-DEFAULT_EPOCHS = 75
+IMG_SIZE = 1024
+DEFAULT_EPOCHS = 200
 LEARNING_RATE = 1e-5
 DEFAULT_SEED = 42
 
-BATCH_SIZE = 8
-NUM_WORKERS = 6
+BATCH_SIZE = 2
+NUM_WORKERS = 8
 
 W_FTL = 0.8
 W_BCE = 0.2
@@ -51,9 +51,9 @@ TVERSKY_BETA = 0.5
 TVERSKY_GAMMA = 2
 SMOOTH = 1e-6
 
-CLAHE_ON = False
+CLAHE_ON = True
 CLAHE_CLIP = 1.5
-CLAHE_MODE = 'green'
+CLAHE_MODE = 'lab'
 
 CLASS_WEIGHTS = [1.0, 1.0, 1.0, 1.0]
 THRESHOLDS = [0.35, 0.35, 0.35, 0.35]

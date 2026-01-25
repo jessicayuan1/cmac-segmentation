@@ -1,3 +1,8 @@
+"""
+This file contains functionality to run one training epoch given a model.
+The model must already have applied the sigmoid function.
+"""
+
 import torch
 import tqdm
 import numpy as np
@@ -7,7 +12,6 @@ from model_training.utils.multilabel_metrics import (
     calculate_recall_per_class,
 )
 
-#Train for one epoch
 def train_one_epoch(
     model,
     dataloader,
@@ -33,12 +37,9 @@ def train_one_epoch(
 
         optimizer.zero_grad()
 
-        # -------------------------
-        # Forward: model returns PROBABILITIES
-        # -------------------------
         outputs = model(imgs)  # (B, C, H, W), probs in [0, 1]
 
-        # Hard safety check (debug-stage friendly)
+        # Ensure all outputs are between 0 and 1
         assert outputs.min() >= 0.0 and outputs.max() <= 1.0, \
             "Model outputs must be probabilities in [0, 1]"
 
@@ -52,15 +53,13 @@ def train_one_epoch(
         all_outputs.append(outputs.detach().cpu())
         all_targets.append(masks.detach().cpu())
 
-    # -------------------------
     # Dataset-level aggregation
-    # -------------------------
-    preds = torch.cat(all_outputs, dim = 0)    # probs
-    targets = torch.cat(all_targets, dim = 0)  # binary masks
+    preds = torch.cat(all_outputs, dim = 0) # probs
+    targets = torch.cat(all_targets, dim = 0) # binary masks
 
     epoch_loss = running_loss / total_samples
 
-    # Metrics expect probabilities + thresholds
+    # Probabilities + thresholds for metrics
     ious, mean_iou = calculate_iou_per_class(preds, targets, thresholds)
     f1s, mean_f1 = calculate_f1_per_class(preds, targets, thresholds)
     recalls, mean_recall = calculate_recall_per_class(preds, targets, thresholds)

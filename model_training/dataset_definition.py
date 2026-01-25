@@ -1,8 +1,13 @@
 """
 This file contains the dataset definition for fundus segmentation.
 It is used directly by only `data_loader.py`.
-"""
 
+It also contains functionality to apply CLAHE preprocessing on the L(AB) channel and the Green channel.
+Contains the application of CASP (Channel-Aware Selective Preprocessing: CLAHE on Green, gaussian blur on Red and Blue).
+
+The dataset definition requires that 3 csv files (train.csv, valid.csv, test.csv) already exist and contain valid paths
+to the 3 dataset: IDRiD, DDR-SEGMENTATION, TJDR
+"""
 import cv2
 import numpy as np
 import pandas as pd
@@ -12,9 +17,7 @@ import albumentations as A
 
 def center_crop_largest_square(x, **kwargs):
     """
-    Albumentations-compatible:
-    - Pure center crop to the largest square from the center
-    - Works for both image (H, W, 3) and mask (H, W)
+    Center crop to the Largest Square from the Center
     """
     h, w = x.shape[:2]
     min_dim = min(h, w)
@@ -23,10 +26,7 @@ def center_crop_largest_square(x, **kwargs):
     return x[top : top + min_dim, left : left + min_dim]
 
 def apply_clahe(
-    image_rgb,
-    clip_limit = 2.5,
-    tile_grid_size = (8, 8),
-    mode = "casp"   # "lab" or "green" or "casp"
+    image_rgb, clip_limit = 2.5, tile_grid_size = (8, 8), mode = "casp" # "lab" or "green" or "casp"
 ):
     clahe = cv2.createCLAHE(
         clipLimit = clip_limit,
@@ -48,29 +48,28 @@ def apply_clahe(
     elif mode == "casp":
         out = image_rgb.copy()
 
-        # --- Green channel: CLAHE ---
+        # Green Channel
         out[:, :, 1] = clahe.apply(out[:, :, 1])
 
-        # --- Red & Blue: light stabilization ---
-        for c in [0, 2]:  # Red, Blue
+        # Red & Blue: Stabalization through Gaussian Blur
+        for c in [0, 2]:
             channel = out[:, :, c]
 
-            # light blur (noise suppression)
+            # light blur
             channel = cv2.GaussianBlur(channel, ksize = (3, 3), sigmaX = 0)
-            # min–max normalization (avoid division by zero)
+            # min–max normalization
             min_val = channel.min()
             max_val = channel.max()
             if max_val > min_val:
                 channel = ((channel - min_val) / (max_val - min_val) * 255).astype(channel.dtype)
-
             out[:, :, c] = channel
-
         return out
     else:
         raise ValueError("mode must be 'lab', 'green', or 'casp'")
 
     
 class CLAHETransform(A.ImageOnlyTransform):
+    """CLAHE transformation definition. Only applies to images, does not touch masks."""
     def __init__(self, dataset, p = 1.0):
         super().__init__(p = p)
         self.dataset = dataset
@@ -88,8 +87,10 @@ class CLAHETransform(A.ImageOnlyTransform):
 
 class FundusSegmentationDataset(Dataset):
     """
-    Fundus Dataset
+    Fundus Dataset Definition
     - Center crop largest square
+    - Random Augmentations and Normalization
+    - CLAHE Preprocessing (if set)
     - Resize to (dimensions, dimensions)
 
     image: (3, H, W)
@@ -105,14 +106,8 @@ class FundusSegmentationDataset(Dataset):
     }
 
     def __init__(
-        self,
-        df: pd.DataFrame,
-        dimensions: int = 512,
-        transform_type = "train",
-        use_clahe: bool = False,
-        clahe_clip: float = 2.5,
-        clahe_tile: tuple = (8, 8),
-        clahe_mode: str = "lab",
+        self, df: pd.DataFrame, dimensions: int = 512, transform_type = "train", use_clahe: bool = False,
+        clahe_clip: float = 2.5, clahe_tile: tuple = (8, 8), clahe_mode: str = "lab",
     ):
         self.df = df.reset_index(drop = True)
         self.dimensions = dimensions
@@ -156,7 +151,7 @@ class FundusSegmentationDataset(Dataset):
                 mask_interpolation = cv2.INTER_NEAREST
             ),
             CLAHETransform(self),
-            A.Normalize(
+            A.Normalize( # Image-Net Normalization
                 mean = (0.485, 0.456, 0.406),
                 std = (0.229, 0.224, 0.225),
             )
@@ -179,13 +174,13 @@ class FundusSegmentationDataset(Dataset):
     def __getitem__(self, index):
         row = self.df.loc[index]
 
-        # ================= Image =================
+        # Image
         image = cv2.imread(row.image_path, cv2.IMREAD_COLOR)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-        # ================= Masks =================
+        # Masks
         if row.dataset == "TJDR":
-            # ---- TJDR: color-coded single annotation ----
+            # TJDR: Color Annotation
             ann = cv2.imread(row.tjdr_ann_path, cv2.IMREAD_COLOR)
             ann = cv2.cvtColor(ann, cv2.COLOR_BGR2RGB)
 
@@ -197,13 +192,13 @@ class FundusSegmentationDataset(Dataset):
             tol = 10
 
             masks = [
-                (near(r, 128, tol + 30) & near(g, 0, tol)   & near(b, 0, tol)).astype(np.uint8),     # EX
-                (near(r, 0, tol)   & near(g, 128, tol + 30) & near(b, 0, tol)).astype(np.uint8),     # HE
-                (near(r, 128, tol + 30) & near(g, 128, tol + 30) & near(b, 0, tol)).astype(np.uint8),     # MA
-                (near(r, 0, tol)   & near(g, 0, tol)   & near(b, 128, tol + 30)).astype(np.uint8),   # SE
+                (near(r, 128, tol + 30) & near(g, 0, tol) & near(b, 0, tol)).astype(np.uint8),              # EX
+                (near(r, 0, tol) & near(g, 128, tol + 30) & near(b, 0, tol)).astype(np.uint8),              # HE
+                (near(r, 128, tol + 30) & near(g, 128, tol + 30) & near(b, 0, tol)).astype(np.uint8),       # MA
+                (near(r, 0, tol) & near(g, 0, tol) & near(b, 128, tol + 30)).astype(np.uint8),              # SE
             ]
         else:
-            # ---- DDR / IDRiD: per-class binary masks ----
+            # DDR & IDRiD: per-class binary masks
             masks = []
             for cls in self.CLASSES:
                 path = getattr(row, self.MASK_COLUMNS[cls])
@@ -216,13 +211,13 @@ class FundusSegmentationDataset(Dataset):
                     mask = (mask > 0).astype(np.uint8)
 
                 masks.append(mask)
-        # ================= Transforms =================
+        # Transforms
         data = self.transforms(
             image = image,
-            mask1 = masks[0],  # EX
-            mask2 = masks[1],  # HE
-            mask3 = masks[2],  # MA
-            mask4 = masks[3],  # SE
+            mask1 = masks[0], # EX
+            mask2 = masks[1], # HE
+            mask3 = masks[2], # MA
+            mask4 = masks[3], # SE
         )
         image = torch.from_numpy(data["image"]).permute(2, 0, 1).to(torch.float32)
         masks = torch.stack(

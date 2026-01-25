@@ -1,8 +1,10 @@
+"""Testing File for multilabel_metrics.py"""
+
 import torch
 import sys
 from pathlib import Path
 
-# ---- Force repo root ----
+
 REPO_ROOT = Path("/Users/liu_michael/Documents/fundus-image-segmentation").resolve()
 sys.path.insert(0, str(REPO_ROOT))
 
@@ -13,7 +15,7 @@ from model_training.utils.multilabel_metrics import (
     print_segmentation_metrics
 )
 
-# ================= Tests =================
+# Test
 
 def main():
     torch.manual_seed(0)
