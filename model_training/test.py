@@ -28,7 +28,7 @@ _, _, test_dataloader = get_fundus_dataloaders(
     clahe_clip = 1.5,
     clahe_mode = 'lab',
     pin_memory = False,
-    num_workers = 1,
+    num_workers = 8,
 )
 
 model.eval()

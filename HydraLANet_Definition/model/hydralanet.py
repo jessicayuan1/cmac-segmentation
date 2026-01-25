@@ -371,7 +371,12 @@ class HydraLANet(nn.Module):
     def initialize(self):
         if self.snapshot:
             try:
-                self.load_state_dict(torch.load(self.snapshot))
+                state_dict = torch.load(
+                    self.snapshot,
+                    map_location = "cpu",
+                    weights_only = True
+                )
+                self.load_state_dict(state_dict)
             except:
                 print("Warning: please check the snapshot file:", self.snapshot)
                 pass
