@@ -18,7 +18,7 @@ from model_training.valid_loop import valid_one_epoch
 
 device = 'cuda' if torch.cuda.is_available() else "cpu"
 
-model = HydraLANet(snapshot = "../runs/baseline/best_model.pt").to(device)
+model = HydraLANet(snapshot = "../../runs/baseline/best_model.pt").to(device)
 
 _, _, test_dataloader = get_fundus_dataloaders(
     resolution = 1024,
