@@ -36,7 +36,7 @@ from model_training.valid_loop import valid_one_epoch
 MODEL_NAME = "2A"
 
 IMG_SIZE = 1024
-DEFAULT_EPOCHS = 200
+DEFAULT_EPOCHS = 150
 LEARNING_RATE = 1e-5
 DEFAULT_SEED = 42
 

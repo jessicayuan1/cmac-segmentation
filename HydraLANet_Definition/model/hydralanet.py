@@ -371,15 +371,21 @@ class HydraLANet(nn.Module):
     def initialize(self):
         if self.snapshot:
             try:
+                snapshot_path = (Path(__file__).parent / self.snapshot).resolve()
+                print("Loading snapshot:", snapshot_path)
+
                 state_dict = torch.load(
-                    self.snapshot,
+                    snapshot_path,
                     map_location = "cpu",
                     weights_only = True
                 )
+
                 self.load_state_dict(state_dict)
-            except:
-                print("Warning: please check the snapshot file:", self.snapshot)
-                pass
+                print("Snapshot loaded successfully")
+
+            except Exception as e:
+                print(f"ERROR loading snapshot {self.snapshot}")
+                raise e
         else:
             for n, m in self.named_children():
                 if isinstance(m, nn.Conv2d):
