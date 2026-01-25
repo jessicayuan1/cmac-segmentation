@@ -1,4 +1,39 @@
-# **Preprocessing and Training Techniques for Enhancing Microaneurysm Segmentation in Fundus Imaging @ WAT.ai**
+# **Enhancing Microaneurysm Segmentation in Retinal Fundus Imaging with HydraLA-Net @ WAT.ai**
+
+This project investigates techniques for improving microaneurysm segmentation in diabetic retinopathy fundus imaging, where lesions are extremely small and often low-contrast relative to surrounding tissue. We experiment on an adapted version of a previously established segmentation model for Diabetic Retinopathy, LA-Net, into HydraLA-Net.
+
+### Project Contributors
+**Jessian Yuan**
+- Technical Project Manager
+
+**Michael Liu**
+- Defined and Finalized the Primary Research Objective
+- Model Architecture and Model Modifications
+- Model Training (WATGPU via SSH)
+- Loss Functions and Class-Imbalance Strategy
+- Dataset Curation, Preprocessing & Augmentations
+- Metrics Design & Evalutation Protocols
+- Documentation (README.md)
+- Drafting of the Final Published Research Paper
+- Consulted on Dataset Clarifications with University of Waterloo School of Optometry Faculty Members
+
+**Andrew Yang**
+- Defined and Finalized the Primary Research Objective
+- Model Training (WATGPU via SSH)
+- Model Architecture Selection
+- Model Architecture Visualization and Figures for Research Paper
+- Literature Review and Research on Related Works
+- Dataset Curation
+- Drafting of the Final Published Research Paper
+
+**Christopher Risi**
+- Technical Support
+
+**William Chiu**
+
+**Tom Almog**
+
+**Sidharth Shah**
 
 ### Overview
 
@@ -9,22 +44,22 @@ This repository contains work in progress on the **semantic segmentation of micr
 ---
 
 ### Research Focus
-This project investigates techniques for improving microaneurysm segmentation in diabetic retinopathy fundus images, where lesions are extremely small and often low-contrast relative to surrounding tissue. In particular, we focus on:
-- **Contrast enhancement strategies** to improve lesion visibility, including channel-specific preprocessing and local contrast normalization (CLAHE).
+Our research primarily focuses on:
+- **Contrast enhancement strategies** to improve lesion visibility, including channel-aware selectice preprocessing (CASP) and local contrast normalization (CLAHE).
 - **Training-time techniques** to improve sensitivity to small structures, including loss functions designed to emphasize microaneurysm recall.
 
 ![CLAHE Demo](model_training/utils/assets/clahe_demo2.png)
 
 ---
 
-### Project Status/Progress
+### Project Status/Progress (as of Jan 24 2026)
 - [x] Dataset Curation 
 - [x] Preprocessing and Augmentation Pipelines
 - [x] Loss Function Development 
 - [x] Data Visualizations
-- [x] CMAC-Net Implementation in PyTorch
+- [x] HydraLA-Net Implementation in PyTorch
 - [x] Training Scripts 
-- [ ] Part 1: Baseline Training
+- [x] Part 1: Baseline Training
 - [ ] Part 2: Preprocessing Variation Analysis
 - [ ] Part 3: Class Imbalance Aware Loss Function Analaysis
 - [ ] Part 4: Explicit Scalar Reweighting of Per-Class Loss Analysis
@@ -35,9 +70,12 @@ This project investigates techniques for improving microaneurysm segmentation in
 
 ### Model
 The segmentation architecture used in this project is based directly on the original research paper that introduced it. 
-* **CMAC-Net** Paper: [CMAC-Net: Cascade Multi-Scale Attention Convolution Network for diabetic retinopathy lesion segmentation](https://www.sciencedirect.com/science/article/pii/S1746809425009954?via%3Dihub) 
+* **LANet-DR** Paper: [Lesion-Aware Network for Diabetic Retinopathy Diagnosis](https://arxiv.org/abs/2408.07264) 
 
-Additionally, a full dynamic implementations of CMAC-Net can be found in this repository.
+The GitHub repository containing the experiment conducted in the paper above can be found at:
+[LANet-DR GitHub Repo](https://github.com/xia-xx-cv/LANet-DR/)
+
+Additionally, a full dynamic implementation of our adapted HydraLA-Net can be found in this repository.
 
 ---
 

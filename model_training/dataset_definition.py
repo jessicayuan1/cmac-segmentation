@@ -71,8 +71,8 @@ def apply_clahe(
 
     
 class CLAHETransform(A.ImageOnlyTransform):
-    def __init__(self, dataset):
-        super().__init__(p = 1.0)
+    def __init__(self, dataset, p = 1.0):
+        super().__init__(p = p)
         self.dataset = dataset
 
     def apply(self, image, **params):
@@ -138,13 +138,13 @@ class FundusSegmentationDataset(Dataset):
                 A.HorizontalFlip(p = 0.5),
                 A.VerticalFlip(p = 0.5),
                 A.Affine(
-                    translate_percent = 0.08,
-                    scale = (0.88, 1.12),
+                    translate_percent = 0.1,
+                    scale = (0.88, 1.25),
                     rotate = (-15, 15),
                     border_mode = cv2.BORDER_CONSTANT,
                     fill = 0,
                     fill_mask = 0,
-                    p = 0.7,
+                    p = 0.75,
                 ),
             ])
 
@@ -191,11 +191,16 @@ class FundusSegmentationDataset(Dataset):
 
             r, g, b = ann[..., 0], ann[..., 1], ann[..., 2]
 
+            def near(val, target, tol = 10):
+                return np.abs(val - target) <= tol
+            
+            tol = 10
+
             masks = [
-                ((r == 128)   & (g == 0)   & (b == 0)).astype(np.uint8),  # EX (red)
-                ((r == 0)   & (g == 128) & (b == 128)).astype(np.uint8),  # HE (green)
-                ((r == 128) & (g == 128) & (b == 0)).astype(np.uint8),    # MA (yellow)
-                ((r == 0) & (g == 0)   & (b == 128)).astype(np.uint8),    # SE (blue)
+                (near(r, 128, tol + 30) & near(g, 0, tol)   & near(b, 0, tol)).astype(np.uint8),     # EX
+                (near(r, 0, tol)   & near(g, 128, tol + 30) & near(b, 0, tol)).astype(np.uint8),     # HE
+                (near(r, 128, tol + 30) & near(g, 128, tol + 30) & near(b, 0, tol)).astype(np.uint8),     # MA
+                (near(r, 0, tol)   & near(g, 0, tol)   & near(b, 128, tol + 30)).astype(np.uint8),   # SE
             ]
         else:
             # ---- DDR / IDRiD: per-class binary masks ----
