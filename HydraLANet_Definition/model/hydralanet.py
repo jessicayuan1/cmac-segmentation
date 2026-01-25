@@ -4,7 +4,11 @@ import torch.nn.functional as F
 from pathlib import Path
 
 """
-Leision Aware Network (LANet) for segmentation task
+HydraLA-Net for Diabetic Retinopathy Multi-Label Semantic Segmentation
+Adapted from: Lesion Aware Network (LANet) for Segmentation Task
+
+This version includes a Hydra Head that splits the final segmentation head into 4 independent 
+class-specific prediction branches.
 """
 
 class HydraSegHead(nn.Module):
@@ -148,18 +152,13 @@ class Head(nn.Module):
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
 
-
-"""
-FPM (Feature-Preserve Module)
-contains Feature-Preserve Block (FPB) and Feature Fusion Block (FFB).
-"""
 class FPB(nn.Module):
     """
     Feature-Preserve Block (FPB).
     """
     def __init__(self, in_channel):
         super(FPB, self).__init__()
-        self.conv0 = nn.Conv2d(in_channel, 512, kernel_size=1, stride=1, padding=0, bias=False)  # bias
+        self.conv0 = nn.Conv2d(in_channel, 512, kernel_size=1, stride=1, padding=0, bias=False)
         self.bn0   = nn.BatchNorm2d(512)
         self.conv1 = nn.Conv2d(512, 256, kernel_size=1, stride=1, padding=0)
         self.conv2 = nn.Conv2d(256, 256, kernel_size=1, stride=1, padding=0)
@@ -208,11 +207,11 @@ class FFB(nn.Module):
         self.initialize_weights()
 
     def forward(self, f_enc, f_dec, f_p):
-        f_enc = F.relu(self.bn0(self.conv0(f_enc)), inplace=True) #256 channels
+        f_enc = F.relu(self.bn0(self.conv0(f_enc)), inplace=True)
         down_2 = self.conv_d2(f_enc)
         z1 = F.relu(down_2 * f_p, inplace=True)
 
-        down = F.relu(self.bn1(self.conv1(f_dec)), inplace=True) #256 channels
+        down = F.relu(self.bn1(self.conv1(f_dec)), inplace=True)
 
         if down.size()[2:] != f_enc.size()[2:]:
             down = F.interpolate(down, size=f_enc.size()[2:], mode='bilinear')
@@ -351,7 +350,7 @@ class HydraLANet(nn.Module):
         # HAM
         out5 = self.head(out5_)
 
-        # out
+        # Out
         out5 = self.lam5(out5)
         out4 = self.lam4(self.ffb45(out4, out5, out4_a))  
         out3 = self.lam3(self.ffb34(out3, out4, out3_a)) 
@@ -390,8 +389,6 @@ class HydraLANet(nn.Module):
                     nn.init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='relu')
                     if m.bias is not None:
                         nn.init.zeros_(m.bias)
-
-
-
+                        
 if __name__ == '__main__':
     net = HydraLANet(snapshot=None)

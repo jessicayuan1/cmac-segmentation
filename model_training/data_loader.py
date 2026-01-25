@@ -4,8 +4,7 @@ The function is imported into the main training file `train.py`.
 
 This module reads preprocessed dataset splits stored as csv files
 (train / validation / test) and constructs corresponding PyTorch
-DataLoader objects. Training data is augmented via multiple transform
-variants using ConcatDataset.
+DataLoader objects. 
 
 Expected files in `data_csv`:
 - train_df.csv

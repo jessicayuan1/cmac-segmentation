@@ -1,3 +1,8 @@
+"""
+This file contains functionality to run one validation epoch given a model.
+The model must already have applied the sigmoid function.
+"""
+
 import torch
 import numpy as np
 from model_training.utils.multilabel_metrics import (
@@ -29,12 +34,9 @@ def valid_one_epoch(
             batch_size = imgs.size(0)
             total_samples += batch_size
 
-            # -------------------------
-            # Forward: model returns PROBABILITIES
-            # -------------------------
-            outputs = model(imgs)  # (B, C, H, W), probs in [0, 1]
+            outputs = model(imgs)
 
-            # Safety check (debug-stage)
+            # Ensure outputs are between 0 and 1
             assert outputs.min() >= 0.0 and outputs.max() <= 1.0, \
                 "Model outputs must be probabilities in [0, 1]"
 
@@ -45,15 +47,13 @@ def valid_one_epoch(
             all_outputs.append(outputs.cpu())
             all_targets.append(masks.cpu())
 
-    # -------------------------
     # Dataset-level aggregation
-    # -------------------------
     preds = torch.cat(all_outputs, dim = 0)
     targets = torch.cat(all_targets, dim = 0)
 
     epoch_loss = val_loss / total_samples
 
-    # Metrics expect probabilities + thresholds
+    # Probabilities + thresholds for metrics
     ious, mean_iou = calculate_iou_per_class(preds, targets, thresholds)
     f1s, mean_f1 = calculate_f1_per_class(preds, targets, thresholds)
     recalls, mean_recall = calculate_recall_per_class(preds, targets, thresholds)
