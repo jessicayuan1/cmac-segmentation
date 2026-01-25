@@ -68,6 +68,36 @@ def apply_clahe(
         return out
     else:
         raise ValueError("mode must be 'lab', 'green', or 'casp'")
+    
+def enhance_ma_green(image):
+    green = image[...,1]
+    # Morphological background (robust)
+    kernel_bg = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15,15))
+    bg = cv2.morphologyEx(green, cv2.MORPH_OPEN, kernel_bg)
+
+    # Dark candidate extraction
+    ma = cv2.subtract(bg, green)
+
+    # Soft sparsification
+    p90 = np.percentile(ma, 90)
+    ma = np.clip(ma - p90, 0, 255).astype(np.uint8)
+
+    image = image.copy()
+    image[...,1] = cv2.addWeighted(green, 1.0, ma, 0.15, 0)
+    return image
+
+
+def enhance_se_green(image):
+    green = image[..., 1]
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (25, 25))
+    se_map = cv2.morphologyEx(green, cv2.MORPH_TOPHAT, kernel)
+
+    se_map = cv2.normalize(se_map, None, 0, 255, cv2.NORM_MINMAX)
+
+    image = image.copy()
+    image[..., 1] = cv2.addWeighted(green, 1.0, se_map, 0.6, 0)
+    return image
 
     
 class CLAHETransform(A.ImageOnlyTransform):
@@ -85,7 +115,21 @@ class CLAHETransform(A.ImageOnlyTransform):
             tile_grid_size = self.dataset.clahe_tile,
             mode = self.dataset.clahe_mode
         )
+class MAEnhanceTransform(A.ImageOnlyTransform):
+    def __init__(self, p=1.0):
+        super().__init__(p=p)
 
+    def apply(self, image, **params):
+        return enhance_ma_green(image)
+
+
+class SEEnhanceTransform(A.ImageOnlyTransform):
+    def __init__(self, p=1.0):
+        super().__init__(p=p)
+
+    def apply(self, image, **params):
+        return enhance_se_green(image)
+    
 class FundusSegmentationDataset(Dataset):
     """
     Fundus Dataset
@@ -156,6 +200,8 @@ class FundusSegmentationDataset(Dataset):
                 mask_interpolation = cv2.INTER_NEAREST
             ),
             CLAHETransform(self),
+            MAEnhanceTransform(p=0.3),
+            SEEnhanceTransform(p=0.3),
             A.Normalize(
                 mean = (0.485, 0.456, 0.406),
                 std = (0.229, 0.224, 0.225),
