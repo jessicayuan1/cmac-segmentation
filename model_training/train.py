@@ -22,7 +22,6 @@ import torch.optim as optim
 import numpy as np
 
 # Local Imports
-from CMAC_net_definition.model.CMAC import CMACNet
 from HydraLANet_Definition.model.hydralanet import HydraLANet
 from model_training.data_loader import get_fundus_dataloaders
 from model_training.loss_functions import (
@@ -209,7 +208,7 @@ def main():
     # ================= Training Loop =================
     for epoch in range(DEFAULT_EPOCHS):
         print(f"\nEpoch [{epoch + 1}/{DEFAULT_EPOCHS}]")
-        
+
         model.train()
         model.apply(freeze_bn)
 

@@ -28,7 +28,6 @@ def analyze_model(model: nn.Module):
 
 
 if __name__ == "__main__":
-    from CMAC_net_definition.model.CMAC import CMACNet
     from HydraLANet_Definition.model.hydralanet import HydraLANet
     """
     model = CMACNet(
